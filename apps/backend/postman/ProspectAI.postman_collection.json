@@ -1,0 +1,76 @@
+{
+  "info": {
+    "name": "ProspectAI API",
+    "description": "Enterprise API collection for ProspectAI opportunity engine",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"alex.rivers@prospectai.dev\",\n  \"password\": \"password123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Opportunities - Search",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/opportunities?query=react+native&remoteOnly=true"
+      }
+    },
+    {
+      "name": "Opportunities - AI NL Search",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/opportunities/search",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"prompt\": \"Remote React Native contracts > $120/hr matching my CV\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Radars - List",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/radars"
+      }
+    },
+    {
+      "name": "Pipeline - Get Active",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/pipeline"
+      }
+    },
+    {
+      "name": "Proposals - Generate",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/proposals/generate",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"opportunityId\": \"opp-1\",\n  \"tone\": \"Executive\",\n  \"channel\": \"email\"\n}"
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000"
+    }
+  ]
+}

@@ -11,16 +11,20 @@
     "start": "npm --prefix apps/mobile start",
     "mobile": "npm --prefix apps/mobile start",
     "web": "npm --prefix apps/web dev",
-    "api": "npm --prefix apps/api dev",
+    "backend": "npm --prefix apps/backend dev",
+    "api": "npm --prefix apps/backend dev",
     "android": "npm --prefix apps/mobile android",
     "ios": "npm --prefix apps/mobile ios",
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
+    "build:backend": "npm --prefix apps/backend build",
     "typecheck": "turbo run typecheck",
+    "typecheck:backend": "npm --prefix apps/backend typecheck",
     "lint": "turbo run lint",
     "start:mobile": "npm --prefix apps/mobile start",
     "start:web": "npm --prefix apps/web dev",
-    "start:api": "npm --prefix apps/api dev"
+    "start:backend": "npm --prefix apps/backend dev",
+    "start:api": "npm --prefix apps/backend dev"
   },
   "dependencies": {
     "@expo/ui": "~57.0.20",
