@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { SettingsPage } from "@/features/prospect/settings";
+export const Route = createFileRoute("/settings")({ head: () => ({ meta: [{ title: "Settings — ProspectAI" }, { name: "description", content: "Manage your ProspectAI preview profile and discovery preferences." }, { property: "og:title", content: "Settings — ProspectAI" }, { property: "og:description", content: "Set your preferences for opportunity discovery." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: SettingsPage });

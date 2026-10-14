@@ -1,0 +1,378 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AutonomyLevel {
+  ASSIST
+  APPROVE
+  AUTOMATE
+}
+
+enum OpportunityType {
+  JOB
+  FREELANCE
+  LEAD
+  CONTRACT
+  SCHOLARSHIP
+  GRANT
+  PARTNER
+  CONSULTING
+}
+
+enum OpportunityStatus {
+  DISCOVERED
+  SAVED
+  IGNORED
+  APPLIED
+  CONTACTED
+  REPLIED
+  INTERVIEWING
+  WON
+  LOST
+  ARCHIVED
+}
+
+enum AttentionPriority {
+  URGENT
+  ACTION_REQUIRED
+  IMPORTANT
+  RECOMMENDED
+  INFO
+}
+
+enum FollowUpStatus {
+  DUE
+  UPCOMING
+  WAITING
+  SENT
+  REPLIED
+  ABANDONED
+}
+
+model User {
+  id                  String               @id @default(uuid())
+  email               String               @unique
+  passwordHash        String?
+  name                String
+  avatarUrl           String?
+  role                String               @default("USER")
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  profile             Profile?
+  goals               Goal[]
+  documents           Document[]
+  opportunities       Opportunity[]
+  radars              OpportunityRadar[]
+  followUps           FollowUp[]
+  attentionItems      AttentionItem[]
+  notifications       Notification[]
+  activities          Activity[]
+  connections         Connection[]
+  creditAccount       CreditAccount?
+  searches            SearchSession[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                  String               @id @default(uuid())
+  userId              String               @unique
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                 String?
+  targetOutcome       String
+  targetCategories    OpportunityType[]
+  targetRoles         String[]
+  targetIndustries    String[]
+  targetLocations     String[]
+  remotePreference    String               @default("remote_only")
+  minCompensation     String?
+  yearsOfExperience   Int                  @default(0)
+  autonomyLevel       AutonomyLevel        @default(APPROVE)
+  onboardingCompleted Boolean              @default(false)
+  skills              Skill[]
+  experiences         Experience[]
+  learnedPreferences  Json?
+
+  @@map("profiles")
+}
+
+model Goal {
+  id                 String          @id @default(uuid())
+  userId             String
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title              String
+  targetMetric       Float
+  currentMetric      Float           @default(0)
+  metricUnit         String
+  targetDate         DateTime
+  category           OpportunityType
+  stage              String          @default("discovery")
+  progressPercentage Float           @default(0)
+  isCompleted        Boolean         @default(false)
+  createdAt          DateTime        @default(now())
+
+  @@map("goals")
+}
+
+model Skill {
+  id             String    @id @default(uuid())
+  profileId      String
+  profile        Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name           String
+  category       String
+  yearsExperience Int?
+  isTopSkill     Boolean   @default(false)
+
+  @@map("skills")
+}
+
+model Experience {
+  id          String   @id @default(uuid())
+  profileId   String
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  role        String
+  company     String
+  period      String
+  description String
+  highlights  String[]
+
+  @@map("experiences")
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  type          String
+  fileUrl       String?
+  fileSize      String?
+  extractedText String?
+  uploadedAt    DateTime @default(now())
+
+  @@map("documents")
+}
+
+model Opportunity {
+  id                 String             @id @default(uuid())
+  userId             String
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type               OpportunityType
+  title              String
+  organization       String
+  organizationLogo   String?
+  location           String
+  isRemote           Boolean            @default(true)
+  remoteType         String?
+  compensation       String
+  compensationAmount Float?
+  deadline           DateTime?
+  contactPerson      String?
+  contactEmail       String?
+  contactRole        String?
+  source             String
+  sourceType         String
+  originalUrl        String
+  description        String
+  summary            String
+  requirements       Json
+  matchScore         Int
+  matchExplanation   String
+  matchPros          String[]
+  matchCons          String[]
+  status             OpportunityStatus  @default(DISCOVERED)
+  nextBestAction     String             @default("prepare")
+  freshness          String             @default("new_today")
+  tags               String[]
+  discoveredAt       DateTime           @default(now())
+  lastInteractedAt   DateTime?
+  timeline           TimelineEvent[]
+  notes              String?
+  metadata           Json?
+
+  @@map("opportunities")
+}
+
+model OpportunityRadar {
+  id                  String          @id @default(uuid())
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title               String
+  prompt              String
+  category            OpportunityType
+  frequency           String          @default("weekdays")
+  scheduleDescription String
+  timeOfDay           String          @default("08:00 AM")
+  status              String          @default("active")
+  lastRunAt           DateTime?
+  nextRunAt           DateTime?
+  totalFound          Int             @default(0)
+  newSinceLastCheck   Int             @default(0)
+  autonomyLevel       AutonomyLevel   @default(APPROVE)
+  targetCriteria      Json
+  runs                AgentRun[]
+  createdAt           DateTime        @default(now())
+
+  @@map("opportunity_radars")
+}
+
+model AgentRun {
+  id                     String           @id @default(uuid())
+  radarId                String
+  radar                  OpportunityRadar @relation(fields: [radarId], references: [id], onDelete: Cascade)
+  startedAt              DateTime         @default(now())
+  completedAt            DateTime?
+  sourcesScannedCount    Int              @default(0)
+  rawFoundCount          Int              @default(0)
+  duplicatesRemovedCount Int              @default(0)
+  qualifiedCount         Int              @default(0)
+  selectedCount          Int              @default(0)
+  preparedCount          Int              @default(0)
+  waitingApprovalCount   Int              @default(0)
+  status                 String           @default("completed")
+  summary                String
+
+  @@map("agent_runs")
+}
+
+model FollowUp {
+  id                String         @id @default(uuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId     String
+  opportunityTitle  String
+  targetName        String
+  targetOrg         String
+  targetEmail       String
+  channel           String         @default("email")
+  cadenceStep       Int            @default(1)
+  daysSinceContact  Int            @default(0)
+  status            FollowUpStatus @default(WAITING)
+  draftSubject      String
+  draftBody         String
+  proposedSendDate  DateTime
+  notes             String?
+
+  @@map("follow_ups")
+}
+
+model AttentionItem {
+  id                      String            @id @default(uuid())
+  userId                  String
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                   String
+  subtitle                String
+  priority                AttentionPriority @default(RECOMMENDED)
+  category                OpportunityType
+  relatedOpportunityId    String?
+  relatedOpportunityTitle String?
+  relatedOrganization     String?
+  actionType              String
+  actionablePrompt        String
+  suggestedActionLabel    String
+  createdAt               DateTime          @default(now())
+  isRead                  Boolean           @default(false)
+  isResolved              Boolean           @default(false)
+  contextSnippet          String?
+
+  @@map("attention_items")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model Activity {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  description String
+  timestamp   DateTime @default(now())
+  metadata    Json?
+
+  @@map("activities")
+}
+
+model Connection {
+  id                      String   @id @default(uuid())
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                    String
+  type                    String
+  icon                    String
+  isConnected             Boolean  @default(false)
+  accountIdentifier       String?
+  permissions             String[]
+  capabilitiesDescription String
+  lastSyncAt              DateTime?
+  status                  String   @default("disconnected")
+
+  @@map("connections")
+}
+
+model CreditAccount {
+  id               String              @id @default(uuid())
+  userId           String              @unique
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance          Int                 @default(500)
+  monthlyAllowance Int                 @default(500)
+  planName         String              @default("Pro Operating")
+  renewalDate      DateTime
+  transactions     CreditTransaction[]
+
+  @@map("credit_accounts")
+}
+
+model CreditTransaction {
+  id          String        @id @default(uuid())
+  accountId   String
+  account     CreditAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  description String
+  amount      Int
+  timestamp   DateTime      @default(now())
+  category    String
+
+  @@map("credit_transactions")
+}
+
+model SearchSession {
+  id                  String          @id @default(uuid())
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rawPrompt           String
+  interpretedCriteria Json
+  resultCount         Int             @default(0)
+  executedAt          DateTime        @default(now())
+
+  @@map("search_sessions")
+}
+
+model TimelineEvent {
+  id            String      @id @default(uuid())
+  opportunityId String
+  opportunity   Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  type          String
+  title         String
+  description   String
+  timestamp     DateTime    @default(now())
+  author        String      @default("user")
+  meta          Json?
+
+  @@map("timeline_events")
+}

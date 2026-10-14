@@ -1,0 +1,5 @@
+- [x] Preserve the existing discovery, opportunity, profile, review and attention journeys.
+- [x] Add a public product story and mock sign-in/onboarding entry without live authentication.
+- [x] Connect goals and remembered context to the workspace home and discoveries.
+- [x] Add inspectable automation plans, mock follow-ups, connections and credit estimates without executing actions.
+- [x] Verify public-to-workspace and existing desktop/mobile flows; resolve diagnostics.

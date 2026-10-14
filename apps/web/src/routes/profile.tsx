@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { ProfilePage } from "@/features/prospect/profile";
+export const Route = createFileRoute("/profile")({ head: () => ({ meta: [{ title: "Your profiles — ProspectAI" }, { name: "description", content: "Review and edit the profile versions used for opportunity preparation." }, { property: "og:title", content: "Your profiles — ProspectAI" }, { property: "og:description", content: "Your reusable context for opportunities and actions." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: ProfilePage });

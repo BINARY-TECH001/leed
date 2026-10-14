@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { ActivityPage } from "@/features/prospect/pages";
+export const Route = createFileRoute("/activity")({ head: () => ({ meta: [{ title: "Activity — ProspectAI" }, { name: "description", content: "Revisit discoveries and track the opportunities you are exploring." }, { property: "og:title", content: "Activity — ProspectAI" }, { property: "og:description", content: "Return to your discoveries and next steps." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: ActivityPage });

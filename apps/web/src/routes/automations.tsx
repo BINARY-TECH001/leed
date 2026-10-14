@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AutomationsPage } from "@/features/prospect/automation";
+export const Route = createFileRoute("/automations")({ head: () => ({ meta: [{ title: "Automations — ProspectAI" }, { name: "description", content: "Preview recurring opportunity discovery on your schedule." }, { property: "og:title", content: "Automations — ProspectAI" }, { property: "og:description", content: "Keep a discovery going and review what turns up." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: AutomationsPage });

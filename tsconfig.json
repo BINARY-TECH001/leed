@@ -3,18 +3,23 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@/assets/*": [
-        "./assets/*"
-      ]
+      "@/*": ["./src/*"],
+      "@/assets/*": ["./assets/*"],
+      "@prospect/types": ["./packages/types/src/index.ts"],
+      "@prospect/utils": ["./packages/utils/src/index.ts"]
     }
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/types/src/**/*.ts",
+    "packages/utils/src/**/*.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "apps/web",
+    "apps/api",
+    "node_modules"
   ]
 }

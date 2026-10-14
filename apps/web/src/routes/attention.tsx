@@ -1,0 +1,3 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AttentionPage } from "@/features/prospect/attention";
+export const Route = createFileRoute("/attention")({ head: () => ({ meta: [{ title: "Attention — ProspectAI" }, { name: "description", content: "Review sample decisions and preparation items that need you." }, { property: "og:title", content: "Attention — ProspectAI" }, { property: "og:description", content: "See what needs your review before anything happens." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" }] }), component: AttentionPage });

@@ -1,14 +1,37 @@
 {
-  "name": "leed",
-  "main": "expo-router/entry",
+  "name": "prospectai-monorepo",
   "version": "1.0.0",
+  "main": "apps/mobile/node_modules/expo-router/entry",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "npm --prefix apps/mobile start",
+    "mobile": "npm --prefix apps/mobile start",
+    "web": "npm --prefix apps/web dev",
+    "api": "npm --prefix apps/api dev",
+    "android": "npm --prefix apps/mobile android",
+    "ios": "npm --prefix apps/mobile ios",
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "start:mobile": "npm --prefix apps/mobile start",
+    "start:web": "npm --prefix apps/web dev",
+    "start:api": "npm --prefix apps/api dev"
+  },
   "dependencies": {
     "@expo/ui": "~57.0.20",
+    "@tanstack/react-query": "^5.104.0",
     "expo": "~57.0.25",
     "expo-constants": "~57.0.19",
     "expo-device": "~57.0.2",
+    "expo-document-picker": "~57.0.2",
     "expo-font": "~57.0.4",
     "expo-glass-effect": "~57.0.4",
+    "expo-haptics": "~57.0.3",
     "expo-image": "~57.0.5",
     "expo-linking": "~57.0.11",
     "expo-router": "~57.0.23",
@@ -17,6 +40,7 @@
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
+    "lucide-react-native": "^1.48.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -24,20 +48,14 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.0",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "turbo": "^2.4.4",
     "typescript": "~6.0.3"
-  },
-  "scripts": {
-    "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
-  },
-  "private": true
+  }
 }

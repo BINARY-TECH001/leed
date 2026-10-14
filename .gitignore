@@ -41,3 +41,11 @@ example
 # generated native folders
 /ios
 /android
+
+# Monorepo and framework artifacts
+.turbo/
+.output/
+.vinxi/
+.nitro/
+.wrangler/
+
