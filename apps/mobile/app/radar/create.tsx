@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
-import { Button } from '@/components/ui';
+import { Button, CustomDateTimePickerSheet } from '@/components/ui';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
 import {
   ArrowLeft2,
@@ -20,17 +20,55 @@ import {
   DirectSend,
   Flash,
   TickCircle,
+  Briefcase,
+  Buildings,
+  Award,
+  DollarCircle,
+  Global,
+  Clock,
+  MagicStar,
 } from 'iconsax-react-native';
 import * as Haptics from 'expo-haptics';
 
-const SUGGESTIONS = [
-  'React Native contract > $110/hr in US/EMEA',
-  'Fintech AI automation leads for seed startups',
-  'Staff Expo Router mobile engineering roles',
-  'Climate tech ML grant applications',
+const CATEGORIES = [
+  {
+    id: 'contract' as const,
+    label: 'Contracts',
+    icon: Flash,
+    color: '#FF6600',
+    desc: 'Hourly & milestone contracts',
+  },
+  {
+    id: 'full-time' as const,
+    label: 'Full-Time',
+    icon: Buildings,
+    color: '#0052FF',
+    desc: 'Principal & Staff roles with equity',
+  },
+  {
+    id: 'lead' as const,
+    label: 'B2B Leads',
+    icon: Briefcase,
+    color: '#10B981',
+    desc: 'Advisory & enterprise clients',
+  },
+  {
+    id: 'grant' as const,
+    label: 'Grants',
+    icon: Award,
+    color: '#8B5CF6',
+    desc: 'Non-dilutive innovation funds',
+  },
 ];
 
-const CATEGORIES = ['contract', 'full-time', 'lead', 'grant'] as const;
+const SUGGESTIONS = [
+  'React Native / Expo 57 contract > $120/hr in US/EMEA',
+  'Fintech AI automation leads for seed to Series B',
+  'Staff mobile architect equity advisory contracts',
+  'Offline-first mobile engineering advisory roles',
+];
+
+const QUICK_TAGS = ['> $120/hr', '100% Remote', 'US / EMEA', 'Matches Primary CV'];
 
 export default function CreateRadarScreen() {
   const router = useRouter();
@@ -40,8 +78,10 @@ export default function CreateRadarScreen() {
 
   const [prompt, setPrompt] = useState(params.initialPrompt || '');
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<typeof CATEGORIES[number]>('contract');
-  const [frequency, setFrequency] = useState<'weekdays' | 'daily' | 'weekly'>('weekdays');
+  const [category, setCategory] = useState<typeof CATEGORIES[number]['id']>('contract');
+  const [frequency, setFrequency] = useState<'weekdays' | 'daily' | 'weekly' | 'custom'>('weekdays');
+  const [customCadenceDate, setCustomCadenceDate] = useState<string>('');
+  const [isCustomPickerOpen, setIsCustomPickerOpen] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
@@ -53,6 +93,11 @@ export default function CreateRadarScreen() {
     return () => clearTimeout(timer);
   }, []);
 
+  const handleAppendTag = (tag: string) => {
+    Haptics.selectionAsync();
+    setPrompt((prev) => (prev ? `${prev} · ${tag}` : tag));
+  };
+
   const handleLaunch = () => {
     if (!prompt.trim()) return;
 
@@ -62,7 +107,7 @@ export default function CreateRadarScreen() {
     setTimeout(() => {
       setIsDeploying(false);
       router.back();
-    }, 400);
+    }, 450);
   };
 
   return (
@@ -74,10 +119,15 @@ export default function CreateRadarScreen() {
           style={[styles.backBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
           activeOpacity={0.7}
         >
-          <ArrowLeft2 size={20} color={colors.text} variant="Linear" />
+          <ArrowLeft2 size={20} color={colors.text} />
         </TouchableOpacity>
 
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Deploy Radar</Text>
+        <View style={styles.headerTitleWrap}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Deploy Autonomous Radar</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]}>
+            Scouts 120+ live endpoints continuously
+          </Text>
+        </View>
 
         <TouchableOpacity onPress={() => router.back()} style={styles.cancelBtn}>
           <Text style={[styles.cancelBtnText, { color: colors.textMuted }]}>Cancel</Text>
@@ -87,76 +137,167 @@ export default function CreateRadarScreen() {
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
           contentContainerStyle={[
             styles.scrollContent,
             { paddingBottom: Math.max(insets.bottom, 24) + 85 },
           ]}
         >
-          {/* Main Query Prompt Input */}
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-            Search Query
-          </Text>
-          <View
-            style={[
-              styles.promptBox,
-              {
-                backgroundColor: isDark ? colors.card : '#FFFFFF',
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <TextInput
-              ref={inputRef}
-              style={[styles.promptInput, { color: colors.text, fontFamily: FONTS.regular }]}
-              placeholder="e.g. Senior Mobile Lead contract paying >$120/hr in US/Europe…"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-              value={prompt}
-              onChangeText={setPrompt}
-              textAlignVertical="top"
-            />
-          </View>
-
-          {/* Prompt Suggestions */}
-          <View style={styles.suggestionsWrap}>
-            <Text style={[styles.subLabel, { color: colors.textMuted }]}>
-              Ideas:
+          {/* Section 1: Category Selection (Rich Interactive Cards) */}
+          <View style={styles.sectionWrap}>
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              1. Opportunity Category
             </Text>
-            <View style={styles.chipsRow}>
-              {SUGGESTIONS.map((sug, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      borderColor: colors.borderSubtle,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setPrompt(sug);
-                  }}
-                >
-                  <Text style={[styles.chipText, { color: colors.textSecondary }]}>
-                    {sug}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+
+            <View style={styles.categoriesGrid}>
+              {CATEGORIES.map((cat) => {
+                const isSelected = category === cat.id;
+                const IconComp = cat.icon;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.categoryCard,
+                      {
+                        backgroundColor: isSelected
+                          ? isDark
+                            ? 'rgba(255, 102, 0, 0.12)'
+                            : '#FFF6F0'
+                          : isDark
+                          ? colors.card
+                          : '#FFFFFF',
+                        borderColor: isSelected ? colors.accent : colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setCategory(cat.id);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.catTopRow}>
+                      <View
+                        style={[
+                          styles.catIconBox,
+                          {
+                            backgroundColor: isSelected ? colors.accent : isDark ? colors.surfaceSecondary : '#F0F4FA',
+                          },
+                        ]}
+                      >
+                        <IconComp
+                          size={16}
+                          color={isSelected ? '#FFFFFF' : cat.color}
+                          variant="Bold"
+                        />
+                      </View>
+
+                      {isSelected && (
+                        <TickCircle size={16} color={colors.accent} variant="Bold" />
+                      )}
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.catLabel,
+                        {
+                          color: isSelected ? colors.accent : colors.text,
+                          fontFamily: isSelected ? FONTS.bold : FONTS.semibold,
+                        },
+                      ]}
+                    >
+                      {cat.label}
+                    </Text>
+
+                    <Text style={[styles.catDesc, { color: colors.textMuted }]} numberOfLines={2}>
+                      {cat.desc}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
-          {/* Radar Name (Optional) */}
-          <View style={styles.sectionSpacing}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-              Radar Name (Optional)
+          {/* Section 2: Natural Language Search Query */}
+          <View style={styles.sectionWrap}>
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              2. Natural Language Scout Prompt
+            </Text>
+
+            <View
+              style={[
+                styles.promptBox,
+                {
+                  backgroundColor: isDark ? colors.card : '#FFFFFF',
+                  borderColor: prompt ? colors.accent : colors.border,
+                },
+              ]}
+            >
+              <TextInput
+                ref={inputRef}
+                style={[styles.promptInput, { color: colors.text, fontFamily: FONTS.regular }]}
+                placeholder="e.g. Senior Mobile Lead contract paying >$120/hr in US/EMEA matching my primary CV…"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={4}
+                value={prompt}
+                onChangeText={setPrompt}
+                textAlignVertical="top"
+              />
+
+              {/* Quick Tag Modifiers */}
+              <View style={[styles.quickTagsBar, { borderTopColor: colors.borderSubtle }]}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagsScroll}>
+                  {QUICK_TAGS.map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      style={[styles.quickTagBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
+                      onPress={() => handleAppendTag(t)}
+                    >
+                      <Text style={[styles.quickTagText, { color: colors.textSecondary }]}>+ {t}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            {/* Prompt Suggestions */}
+            <View style={styles.suggestionsBlock}>
+              <Text style={[styles.subLabel, { color: colors.textMuted }]}>
+                Suggested Query Ideas:
+              </Text>
+              <View style={styles.suggestionsList}>
+                {SUGGESTIONS.map((sug, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.sugCard,
+                      {
+                        backgroundColor: isDark ? colors.card : '#FFFFFF',
+                        borderColor: colors.borderSubtle,
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setPrompt(sug);
+                    }}
+                  >
+                    <Flash size={13} color={colors.accent} variant="Bold" />
+                    <Text style={[styles.sugCardText, { color: colors.text }]} numberOfLines={1}>
+                      {sug}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Section 3: Radar Name (Optional) */}
+          <View style={styles.sectionWrap}>
+            <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+              3. Radar Name (Optional)
             </Text>
             <TextInput
               style={[
@@ -165,7 +306,6 @@ export default function CreateRadarScreen() {
                   backgroundColor: isDark ? colors.card : '#FFFFFF',
                   borderColor: colors.border,
                   color: colors.text,
-                  fontFamily: FONTS.medium,
                 },
               ]}
               placeholder="e.g. Fintech Mobile Architect Scout"
@@ -175,66 +315,43 @@ export default function CreateRadarScreen() {
             />
           </View>
 
-          {/* Category Chips */}
-          <View style={styles.sectionSpacing}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-              Category
-            </Text>
-            <View style={styles.categoryRow}>
-              {CATEGORIES.map((cat) => {
-                const isSelected = category === cat;
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[
-                      styles.categoryBtn,
-                      {
-                        backgroundColor: isSelected
-                          ? colors.accent
-                          : isDark
-                          ? colors.card
-                          : '#FFFFFF',
-                        borderColor: isSelected ? colors.accent : colors.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setCategory(cat);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryBtnText,
-                        {
-                          color: isSelected ? '#FFFFFF' : colors.textSecondary,
-                          fontFamily: isSelected ? FONTS.bold : FONTS.medium,
-                        },
-                      ]}
-                    >
-                      {cat.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+          {/* Section 4: Cadence & Timing */}
+          <View style={styles.sectionWrap}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+                4. Scan Cadence
+              </Text>
+              {frequency === 'custom' && customCadenceDate ? (
+                <TouchableOpacity onPress={() => setIsCustomPickerOpen(true)}>
+                  <Text style={{ fontFamily: FONTS.semiBold, fontSize: 12, color: colors.accent }}>
+                    Edit Date & Time ✎
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
-          </View>
 
-          {/* Frequency Selector */}
-          <View style={styles.sectionSpacing}>
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
-              Cadence
-            </Text>
-            <View style={styles.freqRow}>
-              {(['weekdays', 'daily', 'weekly'] as const).map((freq) => {
-                const isSelected = frequency === freq;
+            <View style={styles.freqGrid}>
+              {[
+                { id: 'weekdays' as const, label: 'Weekdays', desc: 'Mon - Fri at 8:30 AM' },
+                { id: 'daily' as const, label: 'Daily', desc: '7 days a week at 8:30 AM' },
+                { id: 'weekly' as const, label: 'Weekly', desc: 'Monday briefings' },
+                {
+                  id: 'custom' as const,
+                  label: 'Custom Timing',
+                  desc: customCadenceDate ? customCadenceDate : 'Pick date & hour',
+                },
+              ].map((f) => {
+                const isSelected = frequency === f.id;
                 return (
                   <TouchableOpacity
-                    key={freq}
+                    key={f.id}
                     style={[
-                      styles.freqBtn,
+                      styles.freqCard,
                       {
                         backgroundColor: isSelected
-                          ? colors.accent
+                          ? isDark
+                            ? 'rgba(255, 102, 0, 0.12)'
+                            : '#FFF6F0'
                           : isDark
                           ? colors.card
                           : '#FFFFFF',
@@ -243,19 +360,41 @@ export default function CreateRadarScreen() {
                     ]}
                     onPress={() => {
                       Haptics.selectionAsync();
-                      setFrequency(freq);
+                      if (f.id === 'custom') {
+                        setIsCustomPickerOpen(true);
+                      } else {
+                        setFrequency(f.id);
+                      }
                     }}
+                    activeOpacity={0.75}
                   >
+                    <View style={styles.freqCardTop}>
+                      <Clock
+                        size={16}
+                        color={isSelected ? colors.accent : colors.textMuted}
+                        variant={isSelected ? 'Bold' : 'Linear'}
+                      />
+                      {isSelected && <TickCircle size={15} color={colors.accent} variant="Bold" />}
+                    </View>
                     <Text
                       style={[
                         styles.freqBtnText,
                         {
-                          color: isSelected ? '#FFFFFF' : colors.textSecondary,
+                          color: isSelected ? colors.accent : colors.text,
                           fontFamily: isSelected ? FONTS.bold : FONTS.medium,
                         },
                       ]}
                     >
-                      {freq === 'weekdays' ? 'Weekdays' : freq === 'daily' ? 'Daily' : 'Weekly'}
+                      {f.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.freqBtnDesc,
+                        { color: isSelected ? colors.textSecondary : colors.textMuted },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {f.desc}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -271,21 +410,43 @@ export default function CreateRadarScreen() {
             {
               backgroundColor: isDark ? colors.surface : '#FFFFFF',
               borderTopColor: colors.borderSubtle,
+              bottom: insets.bottom,
             },
           ]}
         >
-          <Button
-            title="Deploy Autonomous Radar"
-            variant="accent"
-            size="lg"
-            rightIcon={<DirectSend size={18} color="#FFFFFF" variant="Bold" />}
+          <TouchableOpacity
+            style={[
+              styles.launchBtn,
+              {
+                backgroundColor: prompt.trim() && !isDeploying ? colors.accent : colors.border,
+              },
+            ]}
             onPress={handleLaunch}
             disabled={!prompt.trim() || isDeploying}
-            isLoading={isDeploying}
-            style={{ width: '100%' }}
-          />
+            activeOpacity={0.88}
+          >
+            <DirectSend size={18} color="#FFFFFF" variant="Bold" />
+            <Text style={styles.launchBtnText}>
+              {isDeploying ? 'Deploying Radar…' : 'Deploy Autonomous Radar'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Custom Date Time Picker Sheet for Scan Cadence */}
+      <CustomDateTimePickerSheet
+        visible={isCustomPickerOpen}
+        onClose={() => setIsCustomPickerOpen(false)}
+        title="Configure Scan Cadence"
+        subtitle="Pick custom date & time for next autonomous scan"
+        showObjective={false}
+        confirmText="Set Scan Cadence"
+        onConfirm={(date) => {
+          setFrequency('custom');
+          setCustomCadenceDate(date);
+          setIsCustomPickerOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -298,20 +459,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
   },
   backBtn: {
     width: 38,
     height: 38,
-    borderRadius: BORDER_RADIUS.full,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerTitleWrap: {
+    flex: 1,
+    marginHorizontal: 10,
   },
   headerTitle: {
     fontSize: 16,
     fontFamily: FONTS.bold,
+  },
+  headerSub: {
+    fontSize: 11.5,
+    fontFamily: FONTS.regular,
   },
   cancelBtn: {
     paddingHorizontal: 8,
@@ -325,96 +494,154 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
+    padding: SPACING.md,
+    gap: 20,
   },
-  fieldLabel: {
-    fontSize: 13,
+  sectionWrap: {
+    gap: 10,
+  },
+  sectionHeading: {
+    fontSize: 12,
     fontFamily: FONTS.semibold,
-    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  categoryCard: {
+    width: '48.5%',
+    padding: 12,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1.2,
+    gap: 4,
+  },
+  catTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  catIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catLabel: {
+    fontSize: 13.5,
+  },
+  catDesc: {
+    fontSize: 11,
+    fontFamily: FONTS.regular,
+    lineHeight: 15,
   },
   promptBox: {
     borderRadius: BORDER_RADIUS.xl,
     borderWidth: 1.5,
-    padding: SPACING.md,
-    minHeight: 110,
-    marginBottom: SPACING.md,
+    padding: 12,
+    gap: 8,
   },
   promptInput: {
-    fontSize: 15,
+    fontSize: 14.5,
     lineHeight: 22,
+    minHeight: 85,
+    padding: 0,
   },
-  suggestionsWrap: {
-    marginBottom: SPACING.lg,
+  quickTagsBar: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  tagsScroll: {
+    gap: 6,
+  },
+  quickTagBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  quickTagText: {
+    fontSize: 11,
+    fontFamily: FONTS.medium,
+  },
+  suggestionsBlock: {
+    gap: 6,
+    marginTop: 2,
   },
   subLabel: {
     fontSize: 11.5,
     fontFamily: FONTS.medium,
-    marginBottom: 6,
   },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  suggestionsList: {
     gap: 6,
   },
-  chip: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: BORDER_RADIUS.full,
+  sugCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 10,
+    borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
   },
-  chipText: {
-    fontSize: 11.5,
-    fontFamily: FONTS.regular,
-  },
-  sectionSpacing: {
-    marginBottom: SPACING.lg,
+  sugCardText: {
+    fontSize: 12,
+    fontFamily: FONTS.medium,
+    flex: 1,
   },
   textInput: {
-    height: 48,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 14,
   },
-  categoryRow: {
+  freqGrid: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  categoryBtn: {
-    flex: 1,
-    paddingVertical: 10,
+  freqCard: {
+    width: '48.5%',
+    padding: 12,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1.2,
+    gap: 4,
   },
-  categoryBtnText: {
-    fontSize: 11.5,
-  },
-  freqRow: {
+  freqCardTop: {
     flexDirection: 'row',
-    gap: 8,
-  },
-  freqBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
   },
   freqBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
+  },
+  freqBtnDesc: {
+    fontSize: 10.5,
+    lineHeight: 14,
   },
   bottomBar: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
     borderTopWidth: 1,
+  },
+  launchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: BORDER_RADIUS.lg,
+    gap: 8,
+  },
+  launchBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontFamily: FONTS.bold,
   },
 });

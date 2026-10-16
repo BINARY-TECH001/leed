@@ -50,3 +50,13 @@ export const getIO = (): SocketIOServer => {
   }
   return io;
 };
+
+export const emitToUser = (userId: string, event: string, data: any): void => {
+  try {
+    if (io) {
+      io.to(`user:${userId}`).emit(event, data);
+    }
+  } catch {
+    // Socket not ready or no clients connected
+  }
+};

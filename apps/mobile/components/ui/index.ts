@@ -4,3 +4,6 @@ export * from './Badge';
 export * from './Input';
 export * from './EmptyState';
 export * from './BottomSheet';
+export * from './ConfirmBottomSheet';
+export * from './AvatarCoverPickerSheet';
+export * from './CustomDateTimePickerSheet';

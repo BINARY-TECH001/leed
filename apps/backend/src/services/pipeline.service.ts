@@ -1,3 +1,5 @@
+import { prisma } from '../utils/prisma.js';
+
 export interface PipelineItem {
   id: string;
   opportunityId: string;
@@ -9,48 +11,34 @@ export interface PipelineItem {
   updatedAt: string;
 }
 
-let pipelineRecords: PipelineItem[] = [
-  {
-    id: 'pipe-1',
-    opportunityId: 'opp-3',
-    stage: 'interviewing',
-    appliedAt: '3 days ago',
-    followUpDate: 'Tomorrow at 10:00 AM',
-    followUpObjective: 'Technical Architecture Round with Mobile Lead',
-    notes: 'Covered offline queue synchronization and CRDT conflict resolution. Impressed with performance benchmarks.',
-    updatedAt: '2026-10-12T14:30:00Z',
-  },
-  {
-    id: 'pipe-2',
-    opportunityId: 'opp-2',
-    stage: 'applied',
-    appliedAt: 'Yesterday',
-    followUpDate: 'In 3 Days',
-    followUpObjective: 'Direct check-in with Guillermo / Eng recruiter',
-    notes: 'Autonomous proposal generated using Principal Architect CV. Highlighted AI workflow optimizations.',
-    updatedAt: '2026-10-12T18:00:00Z',
-  },
-  {
-    id: 'pipe-3',
-    opportunityId: 'opp-1',
-    stage: 'follow_up',
-    appliedAt: '4 days ago',
-    followUpDate: 'Today',
-    followUpObjective: 'Send SOC2 compliance case study and ledger benchmarks',
-    notes: 'Hourly rate agreed at $145/hr. Awaiting SOW draft approval.',
-    updatedAt: '2026-10-13T09:15:00Z',
-  },
-  {
-    id: 'pipe-4',
-    opportunityId: 'opp-4',
-    stage: 'saved',
-    notes: 'High potential for retainer extension beyond initial $28k scope.',
-    updatedAt: '2026-10-11T16:00:00Z',
-  },
-];
+const mapStageToPrisma = (stage: string) => {
+  switch (stage.toLowerCase()) {
+    case 'saved': return 'SAVED';
+    case 'applied': return 'APPLIED';
+    case 'interviewing': return 'INTERVIEWING';
+    case 'follow_up':
+    case 'contacted': return 'CONTACTED';
+    case 'won': return 'WON';
+    case 'archived': return 'ARCHIVED';
+    default: return 'SAVED';
+  }
+};
+
+const mapPrismaToStage = (stage: string): PipelineItem['stage'] => {
+  switch (stage) {
+    case 'SAVED': return 'saved';
+    case 'APPLIED': return 'applied';
+    case 'INTERVIEWING': return 'interviewing';
+    case 'CONTACTED':
+    case 'REPLIED': return 'follow_up';
+    case 'WON': return 'won';
+    case 'ARCHIVED': return 'archived';
+    default: return 'saved';
+  }
+};
 
 export class PipelineService {
-  static async getPipeline(): Promise<{
+  static async getPipeline(userId: string): Promise<{
     records: PipelineItem[];
     stats: {
       total: number;
@@ -60,99 +48,151 @@ export class PipelineService {
       followUpsDue: number;
     };
   }> {
+    const userOpportunities = await prisma.userOpportunity.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      include: { opportunity: true },
+    });
+
+    const records: PipelineItem[] = userOpportunities.map((uo) => ({
+      id: uo.id,
+      opportunityId: uo.opportunityId,
+      stage: mapPrismaToStage(uo.stage),
+      appliedAt: uo.appliedAt ? uo.appliedAt.toISOString() : undefined,
+      followUpDate: uo.followUpDate ? uo.followUpDate.toISOString() : undefined,
+      followUpObjective: uo.followUpObjective || undefined,
+      notes: uo.notes || undefined,
+      updatedAt: uo.updatedAt.toISOString(),
+    }));
+
     const stats = {
-      total: pipelineRecords.length,
-      saved: pipelineRecords.filter((r) => r.stage === 'saved').length,
-      applied: pipelineRecords.filter((r) => r.stage === 'applied').length,
-      interviewing: pipelineRecords.filter((r) => r.stage === 'interviewing').length,
-      followUpsDue: pipelineRecords.filter(
-        (r) => r.stage === 'follow_up' || (r.followUpDate && r.followUpDate.includes('Today'))
+      total: records.length,
+      saved: records.filter((r) => r.stage === 'saved').length,
+      applied: records.filter((r) => r.stage === 'applied').length,
+      interviewing: records.filter((r) => r.stage === 'interviewing').length,
+      followUpsDue: records.filter(
+        (r) => r.stage === 'follow_up' || (r.followUpDate && new Date(r.followUpDate) <= new Date())
       ).length,
     };
 
-    return { records: pipelineRecords, stats };
+    return { records, stats };
   }
 
   static async updateStage(
+    userId: string,
     opportunityId: string,
     stage: 'saved' | 'applied' | 'follow_up' | 'interviewing' | 'won' | 'archived',
     notes?: string
   ): Promise<PipelineItem> {
-    const existing = pipelineRecords.find((r) => r.opportunityId === opportunityId);
+    const prismaStage = mapStageToPrisma(stage) as any;
 
-    if (existing) {
-      existing.stage = stage;
-      existing.updatedAt = new Date().toISOString();
-      if (notes) existing.notes = notes;
-      return existing;
-    }
+    const uo = await prisma.userOpportunity.upsert({
+      where: {
+        userId_opportunityId: { userId, opportunityId },
+      },
+      update: {
+        stage: prismaStage,
+        appliedAt: stage === 'applied' ? new Date() : undefined,
+        notes: notes !== undefined ? notes : undefined,
+      },
+      create: {
+        userId,
+        opportunityId,
+        stage: prismaStage,
+        appliedAt: stage === 'applied' ? new Date() : undefined,
+        notes: notes || 'Opportunity tracked in pipeline.',
+      },
+    });
 
-    const newItem: PipelineItem = {
-      id: `pipe-${Date.now()}`,
-      opportunityId,
-      stage,
-      notes: notes || 'Opportunity tracked in pipeline.',
-      updatedAt: new Date().toISOString(),
+    return {
+      id: uo.id,
+      opportunityId: uo.opportunityId,
+      stage: mapPrismaToStage(uo.stage),
+      appliedAt: uo.appliedAt ? uo.appliedAt.toISOString() : undefined,
+      followUpDate: uo.followUpDate ? uo.followUpDate.toISOString() : undefined,
+      followUpObjective: uo.followUpObjective || undefined,
+      notes: uo.notes || undefined,
+      updatedAt: uo.updatedAt.toISOString(),
     };
-
-    pipelineRecords.unshift(newItem);
-    return newItem;
   }
 
   static async scheduleFollowUp(
+    userId: string,
     opportunityId: string,
     date: string,
     objective: string
   ): Promise<PipelineItem> {
-    const existing = pipelineRecords.find((r) => r.opportunityId === opportunityId);
+    const parsedDate = new Date(date);
+    const validDate = isNaN(parsedDate.getTime()) ? new Date(Date.now() + 86400000) : parsedDate;
 
-    if (existing) {
-      existing.followUpDate = date;
-      existing.followUpObjective = objective;
-      if (existing.stage === 'saved') {
-        existing.stage = 'follow_up';
-      }
-      existing.updatedAt = new Date().toISOString();
-      return existing;
-    }
+    const uo = await prisma.userOpportunity.upsert({
+      where: {
+        userId_opportunityId: { userId, opportunityId },
+      },
+      update: {
+        stage: 'CONTACTED',
+        followUpDate: validDate,
+        followUpObjective: objective,
+      },
+      create: {
+        userId,
+        opportunityId,
+        stage: 'CONTACTED',
+        followUpDate: validDate,
+        followUpObjective: objective,
+      },
+    });
 
-    const newItem: PipelineItem = {
-      id: `pipe-${Date.now()}`,
-      opportunityId,
+    return {
+      id: uo.id,
+      opportunityId: uo.opportunityId,
       stage: 'follow_up',
-      followUpDate: date,
-      followUpObjective: objective,
-      updatedAt: new Date().toISOString(),
+      followUpDate: uo.followUpDate ? uo.followUpDate.toISOString() : undefined,
+      followUpObjective: uo.followUpObjective || undefined,
+      notes: uo.notes || undefined,
+      updatedAt: uo.updatedAt.toISOString(),
     };
-
-    pipelineRecords.unshift(newItem);
-    return newItem;
   }
 
-  static async updateNotes(opportunityId: string, notes: string): Promise<PipelineItem> {
-    const existing = pipelineRecords.find((r) => r.opportunityId === opportunityId);
+  static async updateNotes(
+    userId: string,
+    opportunityId: string,
+    notes: string
+  ): Promise<PipelineItem> {
+    const uo = await prisma.userOpportunity.upsert({
+      where: {
+        userId_opportunityId: { userId, opportunityId },
+      },
+      update: {
+        notes,
+      },
+      create: {
+        userId,
+        opportunityId,
+        stage: 'SAVED',
+        notes,
+      },
+    });
 
-    if (existing) {
-      existing.notes = notes;
-      existing.updatedAt = new Date().toISOString();
-      return existing;
+    return {
+      id: uo.id,
+      opportunityId: uo.opportunityId,
+      stage: mapPrismaToStage(uo.stage),
+      notes: uo.notes || undefined,
+      updatedAt: uo.updatedAt.toISOString(),
+    };
+  }
+
+  static async remove(userId: string, opportunityId: string): Promise<boolean> {
+    try {
+      await prisma.userOpportunity.delete({
+        where: {
+          userId_opportunityId: { userId, opportunityId },
+        },
+      });
+      return true;
+    } catch {
+      return false;
     }
-
-    const newItem: PipelineItem = {
-      id: `pipe-${Date.now()}`,
-      opportunityId,
-      stage: 'saved',
-      notes,
-      updatedAt: new Date().toISOString(),
-    };
-
-    pipelineRecords.unshift(newItem);
-    return newItem;
-  }
-
-  static async remove(opportunityId: string): Promise<boolean> {
-    const initialLen = pipelineRecords.length;
-    pipelineRecords = pipelineRecords.filter((r) => r.opportunityId !== opportunityId);
-    return pipelineRecords.length < initialLen;
   }
 }

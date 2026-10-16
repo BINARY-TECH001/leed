@@ -6,6 +6,9 @@ import { initSocket } from './socket.js';
 import apiRoutes from './routes/index.js';
 import { rateLimiter } from './middleware/rateLimiter.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
+import { RadarWorkerService } from './services/radarWorker.service.js';
+import { FreshnessService } from './services/freshness.service.js';
+import './connectors/index.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -43,16 +46,30 @@ app.use(errorHandler);
 // 5. Initialize Socket.IO
 initSocket(server);
 
-// 6. Start HTTP Server
+// 6. Start Background Workers
+const workerIntervalMs = process.env.RADAR_WORKER_INTERVAL_MS
+  ? parseInt(process.env.RADAR_WORKER_INTERVAL_MS, 10)
+  : 60000;
+RadarWorkerService.start(workerIntervalMs);
+FreshnessService.start(300000); // Sweep every 5 minutes
+
+import { ConfigValidator } from './utils/configValidator.js';
+
+// 7. Start HTTP Server
 server.listen(Number(PORT), HOST, () => {
   console.log(`🚀 ProspectAI Backend running at http://${HOST}:${PORT}`);
   console.log(`🔌 Socket.IO live on ws://${HOST}:${PORT}`);
   console.log(`📡 Endpoints available under http://${HOST}:${PORT}/api/v1`);
+  console.log(`⚙️ Radar Worker started (interval: ${workerIntervalMs}ms)`);
+  console.log(`🧹 Freshness & Expiry Worker active (interval: 300000ms)`);
+  ConfigValidator.validateAndReport();
 });
 
 // Graceful shutdown
 const shutdown = () => {
   console.log('Shutting down server gracefully...');
+  RadarWorkerService.stop();
+  FreshnessService.stop();
   server.close(() => {
     console.log('HTTP server closed.');
     process.exit(0);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,30 +8,35 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
-  Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useTheme } from '@/context/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
-import { usePipeline } from '@/context/PipelineContext';
-import { Badge } from '@/components/ui';
-import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
-import { AttentionCard } from '@/components/attention/AttentionCard';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
+import { usePipeline } from "@/context/PipelineContext";
+import { Badge, Card, ConfirmBottomSheet, CustomDateTimePickerSheet } from "@/components/ui";
+import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
+import { AttentionCard } from "@/components/attention/AttentionCard";
 import {
   SAMPLE_OPPORTUNITIES,
   SAMPLE_ATTENTION_ITEMS,
-} from '@/constants/mockData';
-import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
+} from "@/constants/mockData";
+import { BORDER_RADIUS, FONTS, SPACING } from "@/constants/theme";
 import {
   SearchNormal1,
   NotificationBing,
   Flash,
   ArrowRight2,
   DirectSend,
-} from 'iconsax-react-native';
-import * as Haptics from 'expo-haptics';
-import type { Opportunity } from '@prospect/types';
+  Radar,
+  Briefcase,
+  Bookmark,
+  TickCircle,
+  Calendar,
+  Send,
+} from "iconsax-react-native";
+import * as Haptics from "expo-haptics";
+import type { Opportunity } from "@prospect/types";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -49,7 +54,14 @@ export default function HomeScreen() {
   const [opportunities, setOpportunities] = useState(SAMPLE_OPPORTUNITIES);
   const [attentionItems] = useState(SAMPLE_ATTENTION_ITEMS);
   const [refreshing, setRefreshing] = useState(false);
-  const [quickPrompt, setQuickPrompt] = useState('');
+  const [quickPrompt, setQuickPrompt] = useState("");
+
+  // Confirmation BottomSheet States (Zero Alerts!)
+  const [activeApplyOpp, setActiveApplyOpp] = useState<Opportunity | null>(
+    null,
+  );
+  const [activeScheduleOpp, setActiveScheduleOpp] =
+    useState<Opportunity | null>(null);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -62,43 +74,36 @@ export default function HomeScreen() {
     if (opp) toggleSave(opp);
   };
 
-  const handleAutoApply = (opp: Opportunity) => {
-    applyToOpportunity(opp);
-    Alert.alert(
-      'Autonomous Application Dispatched',
-      `Proposal calibrated with your active CV has been dispatched for ${opp.organization}. Added to Pipeline.`
-    );
-  };
-
-  const handleMailPitch = (opp: Opportunity) => {
-    router.push(`/composer/${opp.id}` as any);
-  };
-
-  const handleSchedule = (opp: Opportunity) => {
-    scheduleFollowUp(opp.id, 'In 3 Days', 'General follow-up check');
-    Alert.alert(
-      'Follow-Up Queued',
-      `Follow-up cadence for ${opp.organization} set for 3 days from now in your pipeline.`
-    );
-  };
-
   const handlePromptSubmit = () => {
     if (!quickPrompt.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push({
-      pathname: '/action',
+      pathname: "/action",
       params: { initialQuery: quickPrompt },
     } as any);
-    setQuickPrompt('');
+    setQuickPrompt("");
   };
 
-  const userName = user?.name ? user.name.split(' ')[0] : 'Engineer';
+  const handleConfirmApply = () => {
+    if (activeApplyOpp) {
+      applyToOpportunity(activeApplyOpp);
+      setActiveApplyOpp(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const userName = user?.name ? user.name.split(" ")[0] : "Alex";
   const topMatches = opportunities.filter((o) => o.matchScore >= 90);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Sleek Header Bar without redundant title */}
-      <View style={[styles.headerBar, { borderBottomColor: colors.borderSubtle }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      edges={["top"]}
+    >
+      {/* Modern Header Bar */}
+      <View
+        style={[styles.headerBar, { borderBottomColor: colors.borderSubtle }]}
+      >
         <View style={styles.headerLeft}>
           <Text style={[styles.greeting, { color: colors.text }]}>
             Hi, {userName} 👋
@@ -106,21 +111,21 @@ export default function HomeScreen() {
           <View style={styles.statusLiveRow}>
             <View style={styles.greenLiveDot} />
             <Text style={[styles.statusLiveText, { color: colors.textMuted }]}>
-              Radars active · 124 streams monitored
+              Radars active · 124 live streams
             </Text>
           </View>
         </View>
 
         <View style={styles.headerRight}>
-          {/* Notification Button with Unread Counter */}
+          {/* Notification Button */}
           <TouchableOpacity
             style={[
               styles.iconCircleBtn,
-              { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' },
+              { backgroundColor: isDark ? colors.surfaceSecondary : "#F0F4FA" },
             ]}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push('/notifications' as any);
+              router.push("/notifications" as any);
             }}
             activeOpacity={0.7}
           >
@@ -130,17 +135,20 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
 
-          {/* Profile Quick Avatar */}
+          {/* User Avatar */}
           <TouchableOpacity
             style={[
               styles.avatarBtn,
-              { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' },
+              { backgroundColor: isDark ? colors.surfaceSecondary : "#F0F4FA" },
             ]}
-            onPress={() => router.push('/(tabs)/profile')}
+            onPress={() => router.push("/(tabs)/profile")}
             activeOpacity={0.8}
           >
             {user?.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={styles.avatarImg}
+              />
             ) : (
               <Text style={[styles.avatarInitial, { color: colors.accent }]}>
                 {userName.charAt(0)}
@@ -151,7 +159,7 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 130 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -161,21 +169,24 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Modern Interactive Search Trigger Bar */}
+        {/* Modern Interactive Search Bar */}
         <TouchableOpacity
           style={[
             styles.searchBarContainer,
             {
-              backgroundColor: isDark ? colors.card : '#FFFFFF',
+              backgroundColor: isDark ? colors.card : "#FFFFFF",
               borderColor: colors.border,
             },
           ]}
-          onPress={() => router.push('/action')}
+          onPress={() => router.push("/action")}
           activeOpacity={0.9}
         >
           <SearchNormal1 size={18} color={colors.accent} variant="Linear" />
           <TextInput
-            style={[styles.searchInput, { color: colors.text, fontFamily: FONTS.regular }]}
+            style={[
+              styles.searchInput,
+              { color: colors.text, fontFamily: FONTS.regular },
+            ]}
             placeholder="Search with tailored context from your CV…"
             placeholderTextColor={colors.textMuted}
             value={quickPrompt}
@@ -185,44 +196,142 @@ export default function HomeScreen() {
           />
           {quickPrompt.trim().length > 0 ? (
             <TouchableOpacity
-              style={[styles.searchActionBtn, { backgroundColor: colors.accent }]}
+              style={[
+                styles.searchActionBtn,
+                { backgroundColor: colors.accent },
+              ]}
               onPress={handlePromptSubmit}
             >
               <DirectSend size={15} color="#FFF" variant="Bold" />
             </TouchableOpacity>
           ) : (
-            <View style={[styles.contextPill, { backgroundColor: isDark ? colors.surfaceSecondary : '#EEF2F6' }]}>
-              <Text style={[styles.contextPillText, { color: colors.textMuted }]}>AI Tailored</Text>
+            <View
+              style={[
+                styles.contextPill,
+                {
+                  backgroundColor: isDark ? colors.surfaceSecondary : "#EEF2F6",
+                },
+              ]}
+            >
+              <Text
+                style={[styles.contextPillText, { color: colors.textMuted }]}
+              >
+                AI Tailored
+              </Text>
             </View>
           )}
         </TouchableOpacity>
 
-        {/* Feature Hero CTA Card with Graphic */}
+        {/* Metric Quick Stats Chips Strip */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.metricsStrip}
+        >
+          <TouchableOpacity
+            style={[
+              styles.metricChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/(tabs)/radar")}
+            activeOpacity={0.7}
+          >
+            <Radar size={15} color={colors.accent} variant="Bold" />
+            <Text
+              style={[styles.metricChipLabel, { color: colors.textSecondary }]}
+            >
+              Radars
+            </Text>
+            <Text style={[styles.metricChipValue, { color: colors.text }]}>
+              {stats.activeRadars}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.metricChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push("/(tabs)/opportunities")}
+            activeOpacity={0.7}
+          >
+            <Briefcase size={15} color="#3B82F6" variant="Bold" />
+            <Text
+              style={[styles.metricChipLabel, { color: colors.textSecondary }]}
+            >
+              Matches
+            </Text>
+            <Text style={[styles.metricChipValue, { color: colors.text }]}>
+              {stats.totalMatches}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.metricChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push('/saved' as any)}
+            activeOpacity={0.7}
+          >
+            <Bookmark size={15} color="#10B981" variant="Bold" />
+            <Text
+              style={[styles.metricChipLabel, { color: colors.textSecondary }]}
+            >
+              Saved
+            </Text>
+            <Text style={[styles.metricChipValue, { color: colors.text }]}>
+              {stats.savedCount}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.metricChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => router.push('/applied' as any)}
+            activeOpacity={0.7}
+          >
+            <Send size={15} color="#8B5CF6" variant="Bold" />
+            <Text
+              style={[styles.metricChipLabel, { color: colors.textSecondary }]}
+            >
+              Applied
+            </Text>
+            <Text style={[styles.metricChipValue, { color: colors.text }]}>
+              {stats.appliedCount}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* Feature Hero Card */}
         <View
           style={[
             styles.heroCtaCard,
-            { backgroundColor: isDark ? colors.card : '#14213D' },
+            { backgroundColor: isDark ? colors.card : "#14213D" },
           ]}
         >
           <View style={styles.heroCtaContent}>
             <View style={styles.ctaBadgeRow}>
               <Flash size={13} color="#FF6600" variant="Bold" />
-              <Text style={styles.ctaBadgeText}>AUTONOMOUS PIPELINE</Text>
+              <Text style={styles.ctaBadgeText}>AUTONOMOUS RADARS ACTIVE</Text>
             </View>
 
             <Text style={styles.heroCtaTitle}>
-              Autonomous Pipeline Active
+              Continuous Opportunity Discovery
             </Text>
             <Text style={styles.heroCtaSub}>
-              124 live streams monitored · Calibrated to your target rate
+              Greenhouse, Arbeitnow & OSM streams scanning every 6 hours with
+              100% Free Zero-Cost Tier.
             </Text>
 
             <TouchableOpacity
               style={[styles.heroCtaBtn, { backgroundColor: colors.accent }]}
-              onPress={() => router.push('/(tabs)/radar')}
+              onPress={() => router.push("/(tabs)/radar")}
               activeOpacity={0.85}
             >
-              <Text style={styles.heroCtaBtnText}>Manage Radars</Text>
+              <Text style={styles.heroCtaBtnText}>Manage Live Radars</Text>
               <ArrowRight2 size={14} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -259,7 +368,7 @@ export default function HomeScreen() {
             </Text>
 
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/opportunities')}
+              onPress={() => router.push("/(tabs)/opportunities")}
               style={styles.seeAllBtn}
             >
               <Text style={[styles.seeAllText, { color: colors.accent }]}>
@@ -276,13 +385,57 @@ export default function HomeScreen() {
               isSaved={isSaved(opp.id)}
               isApplied={isApplied(opp.id)}
               onToggleSave={handleToggleSave}
-              onAutoApply={handleAutoApply}
-              onMailPitch={handleMailPitch}
-              onSchedule={handleSchedule}
+              onAutoApply={(target) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveApplyOpp(target);
+              }}
+              onMailPitch={(target) =>
+                router.push(`/composer/${target.id}` as any)
+              }
+              onSchedule={(target) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setActiveScheduleOpp(target);
+              }}
             />
           ))}
         </View>
       </ScrollView>
+
+      {/* Auto-Apply Confirmation BottomSheet (Zero Alerts) */}
+      <ConfirmBottomSheet
+        visible={!!activeApplyOpp}
+        title="Dispatch Autonomous Application?"
+        description={
+          activeApplyOpp
+            ? `Calibrated proposal with your primary CV will be dispatched for "${activeApplyOpp.title}" at ${activeApplyOpp.organization}. Added to Pipeline.`
+            : ""
+        }
+        confirmText="Dispatch Application"
+        cancelText="Cancel"
+        variant="accent"
+        icon={<Flash size={36} color={colors.accent} variant="Bold" />}
+        onConfirm={handleConfirmApply}
+        onCancel={() => setActiveApplyOpp(null)}
+      />
+
+      {/* Schedule Follow-Up Custom Date Time Picker Sheet */}
+      {activeScheduleOpp && (
+        <CustomDateTimePickerSheet
+          visible={!!activeScheduleOpp}
+          onClose={() => setActiveScheduleOpp(null)}
+          title={`Schedule for ${activeScheduleOpp.organization}`}
+          subtitle={activeScheduleOpp.title}
+          initialObjective="General follow-up check"
+          onConfirm={(scheduledDate, objective) => {
+            scheduleFollowUp(
+              activeScheduleOpp.id,
+              scheduledDate,
+              objective
+            );
+            setActiveScheduleOpp(null);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -292,9 +445,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.xs,
     paddingBottom: SPACING.sm,
@@ -309,8 +462,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   statusLiveRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
     marginTop: 2,
   },
@@ -318,173 +471,190 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
   },
   statusLiveText: {
-    fontSize: 11.5,
-    fontFamily: FONTS.regular,
+    fontSize: 12,
+    fontFamily: FONTS.medium,
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   iconCircleBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
   },
   badgeDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 4,
     right: 4,
-    minWidth: 16,
-    height: 16,
-    borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    minWidth: 15,
+    height: 15,
+    borderRadius: 7.5,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 3,
   },
   badgeDotText: {
-    color: '#FFF',
-    fontSize: 9.5,
+    color: "#FFF",
+    fontSize: 9,
     fontFamily: FONTS.bold,
   },
   avatarBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   avatarImg: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   avatarInitial: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.bold,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-    paddingBottom: 130, // Clearance so content scrolls seamlessly underneath floating tab bar
+    padding: SPACING.md,
+    paddingBottom: 130,
   },
   searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 50,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: SPACING.md,
+    height: 48,
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    marginBottom: SPACING.md,
     gap: 10,
-    marginBottom: SPACING.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
   },
   searchInput: {
     flex: 1,
-    height: '100%',
+    height: "100%",
     fontSize: 13.5,
+  },
+  searchActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   contextPill: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: BORDER_RADIUS.full,
   },
   contextPillText: {
     fontSize: 10.5,
     fontFamily: FONTS.medium,
   },
-  searchActionBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  metricsStrip: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: SPACING.md,
+    paddingRight: SPACING.md,
+  },
+  metricChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    gap: 6,
+  },
+  metricChipLabel: {
+    fontFamily: FONTS.medium,
+    fontSize: 12,
+  },
+  metricChipValue: {
+    fontFamily: FONTS.bold,
+    fontSize: 13,
   },
   heroCtaCard: {
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+    overflow: "hidden",
   },
   heroCtaContent: {
-    width: '100%',
+    width: "100%",
   },
   ctaBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
   },
   ctaBadgeText: {
-    color: '#FF6600',
-    fontSize: 10.5,
+    color: "#FF6600",
     fontFamily: FONTS.bold,
+    fontSize: 11,
     letterSpacing: 0.6,
   },
   heroCtaTitle: {
-    color: '#FFFFFF',
-    fontSize: 19,
+    color: "#FFFFFF",
     fontFamily: FONTS.bold,
+    fontSize: 17,
     letterSpacing: -0.3,
-    marginBottom: 4,
   },
   heroCtaSub: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 13,
+    color: "rgba(255, 255, 255, 0.75)",
     fontFamily: FONTS.regular,
+    fontSize: 12.5,
     lineHeight: 18,
-    marginBottom: SPACING.md,
+    marginTop: 4,
+    marginBottom: 12,
   },
   heroCtaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: BORDER_RADIUS.full,
   },
   heroCtaBtnText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
+    fontFamily: FONTS.semiBold,
     fontSize: 13,
-    fontFamily: FONTS.bold,
   },
   sectionBlock: {
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.lg,
   },
   sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.sm + 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: SPACING.sm,
   },
   titleWithBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   sectionHeading: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: FONTS.bold,
     letterSpacing: -0.3,
   },
   seeAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   seeAllText: {
-    fontSize: 13,
-    fontFamily: FONTS.semibold,
+    fontSize: 12.5,
+    fontFamily: FONTS.semiBold,
   },
 });

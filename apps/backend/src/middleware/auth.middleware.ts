@@ -4,6 +4,10 @@ import type { AuthenticatedRequest, AuthUser } from '../types/index.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'prospectai_jwt_super_secret_key_2026_dev';
 
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('FATAL: JWT_SECRET environment variable must be set in production');
+}
+
 export const authenticateToken = (
   req: AuthenticatedRequest,
   res: Response,
@@ -13,10 +17,10 @@ export const authenticateToken = (
   const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
   if (!token) {
-    // Provide fallback demo engineer identity in development if no token provided
-    if (process.env.NODE_ENV !== 'production') {
+    // Only allow explicit dev bypass if explicitly opted-in via header during local isolated integration tests
+    if (process.env.NODE_ENV !== 'production' && req.headers['x-dev-test-mock'] === 'true') {
       req.user = {
-        id: 'usr-1',
+        id: 'usr-dev-test',
         email: 'alex.rivers@prospectai.dev',
         name: 'Alex Rivers',
         role: 'USER',
@@ -35,3 +39,5 @@ export const authenticateToken = (
     res.status(401).json({ success: false, error: 'Unauthorized: Token expired or invalid' });
   }
 };
+
+export const authenticate = authenticateToken;

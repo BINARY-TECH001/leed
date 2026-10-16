@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -48,71 +48,73 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
   const bottomMargin = Math.max(insets.bottom, Platform.OS === 'ios' ? 20 : 16);
 
   return (
-    <View
-      style={[
-        styles.floatingWrapper,
-        {
-          bottom: bottomMargin,
-        },
-      ]}
-      pointerEvents="box-none"
-    >
+    <>
       <View
         style={[
-          styles.container,
+          styles.floatingWrapper,
           {
-            backgroundColor: isDark
-              ? 'rgba(20, 33, 61, 0.72)'
-              : 'rgba(255, 255, 255, 0.82)',
-            borderColor: isDark
-              ? 'rgba(255, 255, 255, 0.16)'
-              : 'rgba(255, 255, 255, 0.85)',
-            shadowColor: isDark ? '#000000' : '#14213D',
+            bottom: bottomMargin,
           },
         ]}
+        pointerEvents="box-none"
       >
-        {/* iOS Frosted Glass Layer */}
-        <BlurView
-          intensity={Platform.OS === 'ios' ? 88 : 50}
-          tint={isDark ? 'dark' : 'light'}
-          style={StyleSheet.absoluteFill}
-        />
-
-        {/* Tab 1: Home */}
-        {renderTabItem('index', 'Home', Home2)}
-
-        {/* Tab 2: Radars */}
-        {renderTabItem('radar', 'Radars', Radar2)}
-
-        {/* Center Tab: Floating Plus FAB Action - Opens dedicated Action & Search screen */}
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            router.push('/action');
-          }}
-          style={styles.fabCenter}
+        <View
+          style={[
+            styles.container,
+            {
+              backgroundColor: isDark
+                ? 'rgba(20, 33, 61, 0.72)'
+                : 'rgba(255, 255, 255, 0.82)',
+              borderColor: isDark
+                ? 'rgba(255, 255, 255, 0.16)'
+                : 'rgba(255, 255, 255, 0.85)',
+              shadowColor: isDark ? '#000000' : '#14213D',
+            },
+          ]}
         >
-          <View
-            style={[
-              styles.fabInner,
-              {
-                backgroundColor: colors.accent,
-                shadowColor: colors.accent,
-              },
-            ]}
+          {/* iOS Frosted Glass Layer */}
+          <BlurView
+            intensity={Platform.OS === 'ios' ? 88 : 50}
+            tint={isDark ? 'dark' : 'light'}
+            style={StyleSheet.absoluteFill}
+          />
+
+          {/* Tab 1: Home */}
+          {renderTabItem('index', 'Home', Home2)}
+
+          {/* Tab 2: Radars */}
+          {renderTabItem('radar', 'Radars', Radar2)}
+
+          {/* Center Tab: Floating Plus FAB Action - Opens full screen Action & Scout */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push('/action');
+            }}
+            style={styles.fabCenter}
           >
-            <Add size={24} color="#FFFFFF" variant="Linear" />
-          </View>
-        </TouchableOpacity>
+            <View
+              style={[
+                styles.fabInner,
+                {
+                  backgroundColor: colors.accent,
+                  shadowColor: colors.accent,
+                },
+              ]}
+            >
+              <Add size={24} color="#FFFFFF" variant="Linear" />
+            </View>
+          </TouchableOpacity>
 
-        {/* Tab 4: Pipeline */}
-        {renderTabItem('opportunities', 'Pipeline', Briefcase)}
+          {/* Tab 4: Pipeline */}
+          {renderTabItem('opportunities', 'Pipeline', Briefcase)}
 
-        {/* Tab 5: Profile */}
-        {renderTabItem('profile', 'Profile', User)}
+          {/* Tab 5: Profile */}
+          {renderTabItem('profile', 'Profile', User)}
+        </View>
       </View>
-    </View>
+    </>
   );
 
   function renderTabItem(

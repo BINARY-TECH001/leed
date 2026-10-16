@@ -14,7 +14,7 @@ export const generateProposal = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const proposal = AIService.generatePitch({
+    const proposal = await AIService.generatePitchAsync({
       opportunity: opp,
       tone,
       channel,

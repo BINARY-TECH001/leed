@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { Card, Badge } from '@/components/ui';
@@ -14,6 +14,8 @@ import {
   Calendar,
   ArchiveAdd,
   Global,
+  Clock,
+  Briefcase,
 } from 'iconsax-react-native';
 import * as Haptics from 'expo-haptics';
 import type { Opportunity } from '@prospect/types';
@@ -39,6 +41,10 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
 }) => {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { width } = useWindowDimensions();
+
+  // Screen-width responsive adjustments
+  const isCompact = width < 370;
 
   const handleCardPress = () => {
     router.push(`/opportunity/${opp.id}` as any);
@@ -55,6 +61,8 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
     if (score >= 75) return 'accent';
     return 'neutral';
   };
+
+  const sourceName = opp.source || 'Verified Partner';
 
   return (
     <Card variant="elevated" style={styles.card} onPress={handleCardPress}>
@@ -80,14 +88,24 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
             >
               {opp.organization}
             </Text>
-            <View style={styles.locationRow}>
-              <Location size={12} color={colors.textMuted} variant="Linear" />
-              <Text
-                style={[styles.locationText, { color: colors.textMuted }]}
-                numberOfLines={1}
-              >
-                {opp.location}
-              </Text>
+            <View style={styles.metaRow}>
+              <View style={styles.locationRow}>
+                <Location size={11} color={colors.textMuted} variant="Linear" />
+                <Text
+                  style={[styles.locationText, { color: colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  {opp.location}
+                </Text>
+              </View>
+
+              {/* Source Origin Badge */}
+              <View style={[styles.sourceBadge, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#F1F5F9' }]}>
+                <Global size={10} color={colors.accent} variant="Bold" />
+                <Text style={[styles.sourceBadgeText, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {sourceName.replace('Verified ', '')}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -146,8 +164,9 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
         </View>
       </View>
 
-      {/* Action Buttons Toolbar */}
+      {/* Fully Responsive Action Buttons Toolbar */}
       <View style={[styles.cardActionGrid, { borderTopColor: colors.borderSubtle }]}>
+        {/* 1. Auto-Apply Button */}
         <TouchableOpacity
           style={[
             styles.actionPillBtn,
@@ -166,7 +185,7 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           activeOpacity={0.75}
         >
           <Flash
-            size={13}
+            size={12}
             color={isApplied ? colors.success : '#FF6600'}
             variant="Bold"
           />
@@ -175,11 +194,13 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
               styles.actionPillText,
               { color: isApplied ? colors.success : colors.text, fontWeight: '700' },
             ]}
+            numberOfLines={1}
           >
-            {isApplied ? 'Applied ✓' : 'Auto-Apply'}
+            {isApplied ? 'Applied' : isCompact ? 'Apply' : 'Auto-Apply'}
           </Text>
         </TouchableOpacity>
 
+        {/* 2. Mail Pitch Button */}
         <TouchableOpacity
           style={[
             styles.actionPillBtn,
@@ -191,10 +212,16 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           }}
           activeOpacity={0.75}
         >
-          <Sms size={13} color={colors.accent} variant="Bold" />
-          <Text style={[styles.actionPillText, { color: colors.text }]}>Mail</Text>
+          <Sms size={12} color={colors.accent} variant="Bold" />
+          <Text
+            style={[styles.actionPillText, { color: colors.text }]}
+            numberOfLines={1}
+          >
+            Mail
+          </Text>
         </TouchableOpacity>
 
+        {/* 3. Schedule Follow-Up Button */}
         <TouchableOpacity
           style={[
             styles.actionPillBtn,
@@ -206,24 +233,44 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
           }}
           activeOpacity={0.75}
         >
-          <Calendar size={13} color={colors.accent} variant="Bold" />
-          <Text style={[styles.actionPillText, { color: colors.text }]}>Schedule</Text>
+          <Calendar size={12} color={colors.accent} variant="Bold" />
+          <Text
+            style={[styles.actionPillText, { color: colors.text }]}
+            numberOfLines={1}
+          >
+            Schedule
+          </Text>
         </TouchableOpacity>
 
+        {/* 4. Save to Pipeline Button */}
         <TouchableOpacity
           style={[
             styles.actionPillBtn,
-            { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' },
+            {
+              backgroundColor: isSaved
+                ? isDark
+                  ? 'rgba(255, 102, 0, 0.14)'
+                  : '#FFF6F0'
+                : isDark
+                ? colors.surfaceSecondary
+                : '#F0F4FA',
+            },
           ]}
           onPress={handleSavePress}
           activeOpacity={0.75}
         >
           <ArchiveAdd
-            size={13}
+            size={12}
             color={isSaved ? colors.accent : colors.textSecondary}
             variant={isSaved ? 'Bold' : 'Linear'}
           />
-          <Text style={[styles.actionPillText, { color: isSaved ? colors.accent : colors.text }]}>
+          <Text
+            style={[
+              styles.actionPillText,
+              { color: isSaved ? colors.accent : colors.text },
+            ]}
+            numberOfLines={1}
+          >
             {isSaved ? 'Saved' : 'Save'}
           </Text>
         </TouchableOpacity>
@@ -234,31 +281,32 @@ export const OpportunityCard: React.FC<OpportunityCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    padding: SPACING.md + 2,
+    padding: SPACING.md,
     marginBottom: SPACING.md,
+    overflow: 'hidden',
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: SPACING.sm + 2,
+    marginBottom: SPACING.sm,
   },
   orgRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: SPACING.sm,
+    marginRight: SPACING.xs,
   },
   orgAvatar: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: SPACING.sm,
   },
   orgInitial: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.bold,
   },
   orgTextContainer: {
@@ -268,51 +316,71 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.semibold,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    marginTop: 1,
+    gap: 2,
   },
   locationText: {
     fontSize: 11,
     fontFamily: FONTS.regular,
+    maxWidth: 120,
+  },
+  sourceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  sourceBadgeText: {
+    fontSize: 10,
+    fontFamily: FONTS.medium,
   },
   actionsRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   saveButton: {
-    padding: 4,
+    padding: 3,
   },
   title: {
-    fontSize: 16.5,
+    fontSize: 16,
     fontFamily: FONTS.bold,
     letterSpacing: -0.2,
     marginBottom: 6,
-    lineHeight: 22,
+    lineHeight: 21,
   },
   summary: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontFamily: FONTS.regular,
     lineHeight: 18,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm + 2,
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: SPACING.sm + 2,
+    paddingTop: SPACING.sm,
     borderTopWidth: 1,
   },
   compBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flex: 1,
   },
   compText: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontFamily: FONTS.bold,
   },
   rightActionRow: {
@@ -324,34 +392,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: BORDER_RADIUS.full,
     backgroundColor: 'rgba(0, 119, 182, 0.08)',
   },
   tagText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontFamily: FONTS.bold,
     letterSpacing: 0.5,
   },
   cardActionGrid: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
-    paddingTop: 10,
+    paddingTop: 8,
     marginTop: 8,
     borderTopWidth: 1,
+    width: '100%',
   },
   actionPillBtn: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    justifyContent: 'center',
+    gap: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
     borderRadius: BORDER_RADIUS.md,
   },
   actionPillText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontFamily: FONTS.medium,
   },
 });

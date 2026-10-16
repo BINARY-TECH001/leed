@@ -258,62 +258,243 @@ const SEED_OPPORTUNITIES: Opportunity[] = [
   },
 ];
 
+const mapPrismaToDomain = (record: any): Opportunity => {
+  return {
+    id: record.id,
+    type: record.type.toLowerCase() as any,
+    title: record.title,
+    organization: record.organization,
+    organizationLogo: record.organizationLogo || undefined,
+    location: record.location,
+    isRemote: record.isRemote,
+    remoteType: (record.remoteType as any) || undefined,
+    compensation: record.compensation,
+    compensationAmount: record.compensationAmount || undefined,
+    deadline: record.deadline ? record.deadline.toISOString() : undefined,
+    contactPerson: record.contactPerson || undefined,
+    contactEmail: record.contactEmail || undefined,
+    contactRole: record.contactRole || undefined,
+    source: record.source,
+    sourceType: record.sourceType as any,
+    originalUrl: record.originalUrl,
+    description: record.description,
+    summary: record.summary,
+    requirements: (record.requirements as any) || [],
+    matchScore: record.matchScore,
+    matchExplanation: record.matchExplanation,
+    matchPros: record.matchPros || [],
+    matchCons: record.matchCons || [],
+    status: record.status.toLowerCase() as any,
+    nextBestAction: record.nextBestAction as any,
+    freshness: record.freshness as any,
+    tags: record.tags || [],
+    discoveredAt: record.discoveredAt ? record.discoveredAt.toISOString() : new Date().toISOString(),
+    lastInteractedAt: record.lastInteractedAt ? record.lastInteractedAt.toISOString() : undefined,
+    timeline: (record.timeline as any) || [],
+    notes: record.notes || undefined,
+    metadata: {
+      sourceObservations: record.sourceObservations || [],
+      isVerified: record.isVerified,
+      canonicalUrl: record.canonicalUrl,
+      lastVerifiedAt: record.lastVerifiedAt,
+      ...(record.metadata || {}),
+    },
+  };
+};
+
 export class OpportunityService {
+  private static isHydrated = false;
+
+  /**
+   * Hydrates the PostgreSQL database with initial verified canonical opportunities on first run
+   */
+  static async ensureSeeded(): Promise<void> {
+    if (this.isHydrated) return;
+
+    try {
+      const count = await prisma.opportunity.count();
+      if (count === 0) {
+        for (const opp of SEED_OPPORTUNITIES) {
+          await prisma.opportunity.create({
+            data: {
+              id: opp.id,
+              type: opp.type.toUpperCase() as any,
+              title: opp.title,
+              organization: opp.organization,
+              organizationLogo: opp.organizationLogo,
+              location: opp.location,
+              isRemote: opp.isRemote,
+              remoteType: opp.remoteType,
+              compensation: opp.compensation,
+              compensationAmount: opp.compensationAmount,
+              deadline: opp.deadline ? new Date(opp.deadline) : null,
+              contactPerson: opp.contactPerson,
+              contactEmail: opp.contactEmail,
+              contactRole: opp.contactRole,
+              source: opp.source,
+              sourceType: opp.sourceType,
+              originalUrl: opp.originalUrl,
+              canonicalUrl: opp.originalUrl,
+              description: opp.description,
+              summary: opp.summary,
+              requirements: opp.requirements as any,
+              matchScore: opp.matchScore,
+              matchExplanation: opp.matchExplanation,
+              matchPros: opp.matchPros,
+              matchCons: opp.matchCons,
+              status: opp.status.toUpperCase() as any,
+              nextBestAction: opp.nextBestAction,
+              freshness: opp.freshness,
+              tags: opp.tags,
+              discoveredAt: opp.discoveredAt ? new Date(opp.discoveredAt) : new Date(),
+              isVerified: true,
+              lastVerifiedAt: new Date(),
+              sourceObservations: {
+                create: {
+                  sourceId: opp.source.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+                  sourceName: opp.source,
+                  sourceType: opp.sourceType,
+                  originalUrl: opp.originalUrl,
+                  canonicalUrl: opp.originalUrl,
+                  verificationStatus: 'verified',
+                  httpStatus: 200,
+                },
+              },
+            },
+          });
+        }
+      }
+      this.isHydrated = true;
+    } catch {
+      // Graceful
+    }
+  }
+
   static async searchOpportunities(filters: OpportunityQueryFilters): Promise<{
     opportunities: Opportunity[];
     total: number;
+    page: number;
+    limit: number;
   }> {
-    let list = [...SEED_OPPORTUNITIES];
+    await this.ensureSeeded();
 
-    if (filters.category && filters.category !== 'all') {
-      list = list.filter((o) => o.type === filters.category);
+    const where: any = {};
+
+    // 1. Category / Type filter
+    const cat = filters.category || filters.type;
+    if (cat && cat !== 'all') {
+      where.type = cat.toUpperCase();
     }
 
-    if (filters.type && filters.type !== 'all') {
-      list = list.filter((o) => o.type === filters.type);
-    }
-
+    // 2. Remote filter
     if (filters.remoteOnly) {
-      list = list.filter((o) => o.isRemote);
+      where.isRemote = true;
     }
 
-    if (filters.minCompRate) {
-      list = list.filter((o) => (o.compensationAmount || 0) >= (filters.minCompRate || 0));
+    // 3. Compensation Floor
+    if (filters.minCompRate && filters.minCompRate > 0) {
+      where.compensationAmount = { gte: filters.minCompRate };
     }
 
+    // 4. High fit filter
     if (filters.highFitOnly) {
-      list = list.filter((o) => o.matchScore >= 90);
+      where.matchScore = { gte: 90 };
     }
 
-    if (filters.query && filters.query.trim()) {
-      const q = filters.query.toLowerCase();
-      list = list.filter(
-        (o) =>
-          o.title.toLowerCase().includes(q) ||
-          o.organization.toLowerCase().includes(q) ||
-          o.tags.some((t) => t.toLowerCase().includes(q))
-      );
+    // 5. Location filter
+    if (filters.location && filters.location.trim()) {
+      where.location = { contains: filters.location.trim(), mode: 'insensitive' };
     }
 
-    // Sort order
+    // 6. Organization filter
+    if (filters.organization && filters.organization.trim()) {
+      where.organization = { contains: filters.organization.trim(), mode: 'insensitive' };
+    }
+
+    // 7. Tags filter
+    if (filters.tags && filters.tags.length > 0) {
+      where.tags = { hasSome: filters.tags };
+    }
+
+    // 8. Query / Keywords search
+    if (filters.keywords && filters.keywords.length > 0) {
+      // Token-based matching: match any of the extracted keywords across text fields
+      where.AND = where.AND || [];
+      const keywordConditions = filters.keywords.map((kw) => ({
+        OR: [
+          { title: { contains: kw, mode: 'insensitive' } },
+          { organization: { contains: kw, mode: 'insensitive' } },
+          { description: { contains: kw, mode: 'insensitive' } },
+          { summary: { contains: kw, mode: 'insensitive' } },
+          { location: { contains: kw, mode: 'insensitive' } },
+        ],
+      }));
+      // At least one keyword group should match
+      where.AND.push({ OR: keywordConditions });
+    } else if (filters.query && filters.query.trim()) {
+      const q = filters.query.trim();
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { organization: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        { summary: { contains: q, mode: 'insensitive' } },
+        { location: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    // 9. Ordering
+    let orderBy: any = { matchScore: 'desc' };
     if (filters.sort === 'comp') {
-      list.sort((a, b) => (b.compensationAmount || 0) - (a.compensationAmount || 0));
+      orderBy = { compensationAmount: 'desc' };
     } else if (filters.sort === 'newest') {
-      list.reverse();
+      orderBy = { discoveredAt: 'desc' };
     } else if (filters.sort === 'org') {
-      list.sort((a, b) => a.organization.localeCompare(b.organization));
-    } else {
-      list.sort((a, b) => b.matchScore - a.matchScore);
+      orderBy = { organization: 'asc' };
     }
+
+    // 10. Pagination
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit = filters.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 50;
+    const skip = (page - 1) * limit;
+
+    const [total, records] = await Promise.all([
+      prisma.opportunity.count({ where }),
+      prisma.opportunity.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+        include: {
+          sourceObservations: {
+            orderBy: { firstSeenAt: 'desc' },
+          },
+        },
+      }),
+    ]);
+
+    const opportunities = records.map(mapPrismaToDomain);
 
     return {
-      opportunities: list,
-      total: list.length,
+      opportunities,
+      total,
+      page,
+      limit,
     };
   }
 
   static async getById(id: string): Promise<Opportunity | null> {
-    const found = SEED_OPPORTUNITIES.find((o) => o.id === id);
-    return found || null;
+    await this.ensureSeeded();
+
+    const record = await prisma.opportunity.findUnique({
+      where: { id },
+      include: {
+        sourceObservations: {
+          orderBy: { firstSeenAt: 'desc' },
+        },
+      },
+    });
+
+    if (!record) return null;
+    return mapPrismaToDomain(record);
   }
 }

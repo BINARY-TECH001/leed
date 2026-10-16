@@ -9,12 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
-  Alert,
+  ActivityIndicator,
+  Share as RNShare,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
-import { Badge, Button, Card } from '@/components/ui';
+import { Badge, Button, ConfirmBottomSheet, BottomSheet, CustomDateTimePickerSheet } from '@/components/ui';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SAMPLE_RADARS, SAMPLE_OPPORTUNITIES } from '@/constants/mockData';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
@@ -28,8 +29,10 @@ import {
   Timer1,
   TickCircle,
   DocumentCopy,
-  ArrowRight2,
-  Filter,
+  Clock,
+  Setting2,
+  MagicStar,
+  DirectSend,
 } from 'iconsax-react-native';
 import * as Haptics from 'expo-haptics';
 import type { OpportunityRadar, AutonomyLevel, Opportunity } from '@prospect/types';
@@ -46,18 +49,36 @@ export default function RadarDetailScreen() {
   const [radar, setRadar] = useState<OpportunityRadar>(foundRadar);
   const [activeTab, setActiveTab] = useState<'gotten' | 'automate' | 'edit'>('gotten');
   const [isScanning, setIsScanning] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [isDeleteSheetOpen, setIsDeleteSheetOpen] = useState(false);
+
+  // BottomSheet Notification State (Zero raw Alert.alert)
+  const [noticeSheet, setNoticeSheet] = useState<{
+    visible: boolean;
+    title: string;
+    subtitle: string;
+  }>({
+    visible: false,
+    title: '',
+    subtitle: '',
+  });
+
+  // Scheduling state using CustomDateTimePickerSheet
+  const [schedulingOpp, setSchedulingOpp] = useState<Opportunity | null>(null);
 
   // Editable local state
   const [editedTitle, setEditedTitle] = useState(radar.title);
   const [editedPrompt, setEditedPrompt] = useState(radar.prompt);
   const [editedFrequency, setEditedFrequency] = useState(radar.frequency);
+  const [customCadenceDate, setCustomCadenceDate] = useState<string>(
+    radar.frequency === 'custom' ? (radar.scheduleDescription || '') : ''
+  );
+  const [isCustomCadenceOpen, setIsCustomCadenceOpen] = useState(false);
   const [editedAutonomy, setEditedAutonomy] = useState<AutonomyLevel>(radar.autonomyLevel || 'approve');
   const [isActive, setIsActive] = useState(radar.status === 'active');
   const [instantAlerts, setInstantAlerts] = useState(true);
   const [filterDuplicates, setFilterDuplicates] = useState(true);
 
-  // Opportunities discovered by this radar
+  // Discovered matches
   const discoveredOpportunities = SAMPLE_OPPORTUNITIES.filter((opp) => {
     if (radar.category && opp.type === radar.category) return true;
     return opp.matchScore >= 88;
@@ -70,16 +91,15 @@ export default function RadarDetailScreen() {
 
   const handleAutoApply = (opp: Opportunity) => {
     applyToOpportunity(opp);
-    Alert.alert('Autonomous Application Dispatched', `Application calibrated for ${opp.organization}. Added to Pipeline.`);
+    setNoticeSheet({
+      visible: true,
+      title: 'Autonomous Application Queued',
+      subtitle: `Application calibrated for ${opp.organization}. Added to Active Pipeline.`,
+    });
   };
 
   const handleMailPitch = (opp: Opportunity) => {
     router.push(`/composer/${opp.id}` as any);
-  };
-
-  const handleSchedule = (opp: Opportunity) => {
-    scheduleFollowUp(opp.id, 'In 3 Days', 'General follow-up check');
-    Alert.alert('Follow-Up Scheduled', `Follow-up queued for ${opp.organization}. Added to Pipeline.`);
   };
 
   const handleRunScan = async () => {
@@ -94,6 +114,12 @@ export default function RadarDetailScreen() {
       totalFound: prev.totalFound + 2,
       newSinceLastCheck: 2,
     }));
+
+    setNoticeSheet({
+      visible: true,
+      title: 'Scan Complete',
+      subtitle: '2 new verified opportunities detected and added to your matches feed.',
+    });
   };
 
   const handleToggleActive = () => {
@@ -108,45 +134,51 @@ export default function RadarDetailScreen() {
 
   const handleSaveEdits = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const scheduleDesc =
+      editedFrequency === 'custom' && customCadenceDate
+        ? (customCadenceDate.startsWith('Custom:') ? customCadenceDate : `Custom: ${customCadenceDate}`)
+        : `Runs ${editedFrequency} at 08:30 AM`;
+
     setRadar((prev) => ({
       ...prev,
       title: editedTitle.trim() || prev.title,
       prompt: editedPrompt.trim() || prev.prompt,
       frequency: editedFrequency,
-      scheduleDescription: `Runs ${editedFrequency} at 08:30 AM`,
+      scheduleDescription: scheduleDesc,
       autonomyLevel: editedAutonomy,
       status: isActive ? 'active' : 'paused',
     }));
     setActiveTab('gotten');
+    setNoticeSheet({
+      visible: true,
+      title: 'Radar Configuration Saved',
+      subtitle: `Automated scraping rules and schedule updated (${scheduleDesc}).`,
+    });
   };
 
-  const handleShare = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+  const handleShare = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await RNShare.share({
+        message: `ProspectAI Radar: "${radar.title}"\nQuery: ${radar.prompt}\nMatches: ${radar.totalFound} found across 120+ portals`,
+        title: radar.title,
+      });
+    } catch {}
   };
 
   const handleDuplicate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert('Radar Duplicated', `A copy of "${radar.title}" has been added to your radar list.`);
+    setNoticeSheet({
+      visible: true,
+      title: 'Radar Duplicated',
+      subtitle: `A copy of "${radar.title}" has been added to your radar list.`,
+    });
   };
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Delete Radar',
-      `Delete "${radar.title}"? Autonomous background discovery for this search will stop.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            router.back();
-          },
-        },
-      ]
-    );
+  const handleConfirmDelete = () => {
+    setIsDeleteSheetOpen(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    router.back();
   };
 
   return (
@@ -154,362 +186,277 @@ export default function RadarDetailScreen() {
       {/* Top Header Bar */}
       <View style={[styles.topBar, { borderBottomColor: colors.borderSubtle }]}>
         <TouchableOpacity
+          style={[styles.roundBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
           onPress={() => router.back()}
-          style={[styles.navBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
           activeOpacity={0.7}
         >
-          <ArrowLeft2 size={20} color={colors.text} variant="Linear" />
+          <ArrowLeft2 size={20} color={colors.text} />
         </TouchableOpacity>
 
-        <View style={styles.titleWrapper}>
-          <Text style={[styles.pageTitle, { color: colors.text }]} numberOfLines={1}>
+        <View style={styles.headerTitleWrap}>
+          <Text style={[styles.headerScreenTitle, { color: colors.text }]} numberOfLines={1}>
             {radar.title}
           </Text>
-          <Text style={[styles.pageSub, { color: colors.textMuted }]}>
-            {radar.scheduleDescription}
+          <Text style={[styles.headerScreenSub, { color: colors.textMuted }]}>
+            {radar.scheduleDescription || `Runs ${radar.frequency}`}
           </Text>
         </View>
 
-        <TouchableOpacity
-          onPress={handleShare}
-          style={[styles.navBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
-          activeOpacity={0.7}
-        >
-          {copiedLink ? (
-            <TickCircle size={18} color={colors.success} variant="Bold" />
-          ) : (
-            <Share size={18} color={colors.text} variant="Linear" />
-          )}
-        </TouchableOpacity>
-      </View>
+        <View style={styles.headerActionsRight}>
+          <TouchableOpacity
+            style={[styles.roundBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
+            onPress={handleShare}
+            activeOpacity={0.7}
+          >
+            <Share size={18} color={colors.text} />
+          </TouchableOpacity>
 
-      {/* Modern 3-Segment Tab Bar */}
-      <View style={[styles.tabBar, { borderBottomColor: colors.borderSubtle }]}>
-        {[
-          { id: 'gotten', label: `Matches (${radar.totalFound})` },
-          { id: 'automate', label: 'Automation' },
-          { id: 'edit', label: 'Settings' },
-        ].map((tab) => {
-          const isSelected = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setActiveTab(tab.id as any);
-              }}
-              style={[
-                styles.tabItem,
-                isSelected && { borderBottomColor: colors.accent, borderBottomWidth: 2.5 },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabItemText,
-                  {
-                    color: isSelected ? colors.accent : colors.textMuted,
-                    fontFamily: isSelected ? FONTS.bold : FONTS.medium,
-                  },
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+          <TouchableOpacity
+            style={[styles.roundBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
+            onPress={() => setIsDeleteSheetOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Trash size={18} color={colors.error || '#EF4444'} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Math.max(insets.bottom, 24) + 85 },
+            { paddingBottom: Math.max(insets.bottom, 24) + 40 },
           ]}
         >
-          {/* TAB 1: WHAT IT HAS GOTTEN */}
-          {activeTab === 'gotten' && (
-            <View>
-              {/* Clean Metric Stats Card */}
-              <View style={styles.metricRow}>
+          {/* Radar Hero Status Card */}
+          <View
+            style={[
+              styles.heroCard,
+              {
+                backgroundColor: isDark ? colors.card : '#FFFFFF',
+                borderColor: colors.borderSubtle,
+              },
+            ]}
+          >
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroLeft}>
                 <View
                   style={[
-                    styles.metricBox,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
+                    styles.radarIconBox,
+                    { backgroundColor: isActive ? 'rgba(255, 102, 0, 0.12)' : 'rgba(148, 163, 184, 0.15)' },
                   ]}
                 >
-                  <Text style={[styles.metricNumber, { color: colors.text }]}>
-                    {radar.totalFound}
-                  </Text>
-                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
-                    Matches
-                  </Text>
+                  <Radar2 size={22} color={isActive ? colors.accent : colors.textMuted} variant="Bold" />
                 </View>
 
-                <View
-                  style={[
-                    styles.metricBox,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
-                  ]}
-                >
-                  <Text style={[styles.metricNumber, { color: colors.accent }]}>
-                    +{radar.newSinceLastCheck}
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.heroRadarTitle, { color: colors.text }]} numberOfLines={1}>
+                    {radar.title}
                   </Text>
-                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
-                    New Today
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.metricBox,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
-                  ]}
-                >
-                  <Text style={[styles.metricNumber, { color: colors.success }]}>
-                    99%
-                  </Text>
-                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
-                    Fit Score
+                  <Text style={[styles.heroFrequency, { color: colors.textMuted }]}>
+                    {radar.scheduleDescription}
                   </Text>
                 </View>
               </View>
 
-              {/* Natural Query Preview */}
-              <View
-                style={[
-                  styles.promptCard,
-                  { backgroundColor: isDark ? colors.card : '#F8FAFC', borderColor: colors.borderSubtle },
-                ]}
-              >
-                <Text style={[styles.promptCardLabel, { color: colors.textMuted }]}>
-                  Search Criteria
-                </Text>
-                <Text style={[styles.promptCardText, { color: colors.text }]}>
-                  "{radar.prompt}"
-                </Text>
-              </View>
-
-              {/* List of Discovered Opportunities */}
-              <View style={styles.listSection}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Discovered Opportunities ({discoveredOpportunities.length})
-                </Text>
-
-                {discoveredOpportunities.map((opp) => (
-                  <OpportunityCard
-                    key={opp.id}
-                    opportunity={opp}
-                    isSaved={isSaved(opp.id)}
-                    isApplied={isApplied(opp.id)}
-                    onToggleSave={handleToggleSave}
-                    onAutoApply={handleAutoApply}
-                    onMailPitch={handleMailPitch}
-                    onSchedule={handleSchedule}
-                  />
-                ))}
-              </View>
-            </View>
-          )}
-
-          {/* TAB 2: AUTOMATION & APPROACHES */}
-          {activeTab === 'automate' && (
-            <View>
-              {/* Active Switch Card */}
-              <View
-                style={[
-                  styles.cardRow,
-                  { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
-                ]}
-              >
-                <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={[styles.cardRowTitle, { color: colors.text }]}>
-                    Background Radar Engine
-                  </Text>
-                  <Text style={[styles.cardRowSub, { color: colors.textMuted }]}>
-                    {isActive ? 'Scanning sources automatically' : 'Paused'}
-                  </Text>
-                </View>
+              {/* Status Switch */}
+              <View style={styles.switchRow}>
+                <View style={[styles.pulseBeacon, { backgroundColor: isActive ? '#10B981' : colors.textMuted }]} />
                 <Switch
                   value={isActive}
                   onValueChange={handleToggleActive}
-                  trackColor={{ false: colors.border, true: colors.accent }}
+                  trackColor={{ false: isDark ? '#334155' : '#CBD5E1', true: colors.accent }}
+                  thumbColor="#FFFFFF"
                 />
               </View>
+            </View>
 
-              {/* Autonomy Level */}
-              <View style={styles.sectionWrap}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Action Mode
-                </Text>
+            {/* Prompt Quote */}
+            <Text style={[styles.heroPromptQuote, { color: colors.textSecondary }]}>
+              "{radar.prompt}"
+            </Text>
 
-                {[
-                  {
-                    id: 'assist',
-                    title: 'Assist Only',
-                    desc: 'Notify when match found. No drafts prepared.',
-                  },
-                  {
-                    id: 'approve',
-                    title: 'Review First (Recommended)',
-                    desc: 'Pre-draft customized proposals for your 1-tap review.',
-                  },
-                  {
-                    id: 'automate',
-                    title: 'Autonomous Outreach',
-                    desc: 'Automatically submit proposals for matches over 95%.',
-                  },
-                ].map((mode) => {
-                  const isSelected = editedAutonomy === mode.id;
-                  return (
-                    <TouchableOpacity
-                      key={mode.id}
-                      style={[
-                        styles.modeCard,
-                        {
-                          backgroundColor: isSelected
-                            ? isDark
-                              ? 'rgba(255, 102, 0, 0.12)'
-                              : '#FFF5EB'
-                            : isDark
-                            ? colors.card
-                            : '#FFFFFF',
-                          borderColor: isSelected ? colors.accent : colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setEditedAutonomy(mode.id as AutonomyLevel);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.modeCardTop}>
-                        <Text
-                          style={[
-                            styles.modeCardName,
-                            { color: isSelected ? colors.accent : colors.text },
-                          ]}
-                        >
-                          {mode.title}
-                        </Text>
-                        {isSelected && <TickCircle size={18} color={colors.accent} variant="Bold" />}
-                      </View>
-                      <Text style={[styles.modeCardDesc, { color: colors.textSecondary }]}>
-                        {mode.desc}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            {/* Metrics Strip & Scan Button */}
+            <View style={[styles.heroFooterRow, { borderTopColor: colors.borderSubtle }]}>
+              <View style={styles.heroMetricItem}>
+                <Text style={[styles.metricNumber, { color: colors.text }]}>{radar.totalFound}</Text>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Total Matches</Text>
               </View>
 
-              {/* Clean Filter Toggles */}
-              <View style={styles.sectionWrap}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Filters
-                </Text>
-
-                <View
-                  style={[
-                    styles.toggleCard,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
-                  ]}
-                >
-                  <View style={{ flex: 1, marginRight: 10 }}>
-                    <Text style={[styles.toggleCardTitle, { color: colors.text }]}>
-                      Instant Alert on High Fit
-                    </Text>
-                    <Text style={[styles.toggleCardSub, { color: colors.textMuted }]}>
-                      Push notification when fit is 90% or higher
-                    </Text>
-                  </View>
-                  <Switch
-                    value={instantAlerts}
-                    onValueChange={setInstantAlerts}
-                    trackColor={{ false: colors.border, true: colors.accent }}
-                  />
-                </View>
-
-                <View
-                  style={[
-                    styles.toggleCard,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border, marginTop: 8 },
-                  ]}
-                >
-                  <View style={{ flex: 1, marginRight: 10 }}>
-                    <Text style={[styles.toggleCardTitle, { color: colors.text }]}>
-                      Filter Duplicate Reposts
-                    </Text>
-                    <Text style={[styles.toggleCardSub, { color: colors.textMuted }]}>
-                      Skip duplicated listings across job boards
-                    </Text>
-                  </View>
-                  <Switch
-                    value={filterDuplicates}
-                    onValueChange={setFilterDuplicates}
-                    trackColor={{ false: colors.border, true: colors.accent }}
-                  />
-                </View>
+              <View style={styles.heroMetricItem}>
+                <Text style={[styles.metricNumber, { color: colors.accent }]}>+{radar.newSinceLastCheck}</Text>
+                <Text style={[styles.metricLabel, { color: colors.textMuted }]}>New Today</Text>
               </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.heroScanBtn,
+                  {
+                    backgroundColor: colors.accent,
+                  },
+                ]}
+                onPress={handleRunScan}
+                disabled={isScanning}
+                activeOpacity={0.8}
+              >
+                {isScanning ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Play size={13} color="#FFFFFF" variant="Bold" />
+                    <Text style={styles.heroScanBtnText}>Scan Now</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Navigation Tabs */}
+          <View style={[styles.tabBarWrap, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}>
+            {[
+              { id: 'gotten', label: `Matches (${discoveredOpportunities.length})` },
+              { id: 'automate', label: 'Automation & Rules' },
+              { id: 'edit', label: 'Edit Query' },
+            ].map((tab) => {
+              const isSelected = activeTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[
+                    styles.tabBtn,
+                    isSelected && {
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 2,
+                      elevation: 2,
+                    },
+                  ]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setActiveTab(tab.id as any);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.tabBtnText,
+                      {
+                        color: isSelected ? colors.text : colors.textMuted,
+                        fontFamily: isSelected ? FONTS.bold : FONTS.medium,
+                      },
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Tab 1: Discovered Opportunities Feed */}
+          {activeTab === 'gotten' && (
+            <View style={styles.feedSection}>
+              {discoveredOpportunities.map((opp) => (
+                <OpportunityCard
+                  key={opp.id}
+                  opportunity={opp}
+                  isSaved={isSaved(opp.id)}
+                  isApplied={isApplied(opp.id)}
+                  onToggleSave={() => handleToggleSave(opp.id)}
+                  onAutoApply={() => handleAutoApply(opp)}
+                  onMailPitch={() => handleMailPitch(opp)}
+                  onSchedule={() => setSchedulingOpp(opp)}
+                />
+              ))}
             </View>
           )}
 
-          {/* TAB 3: SETTINGS & EDIT */}
-          {activeTab === 'edit' && (
-            <View>
-              {/* Radar Title */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Name</Text>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      borderColor: colors.border,
-                      color: colors.text,
-                      fontFamily: FONTS.medium,
-                    },
-                  ]}
-                  value={editedTitle}
-                  onChangeText={setEditedTitle}
-                  placeholder="Radar Name"
-                  placeholderTextColor={colors.textMuted}
-                />
+          {/* Tab 2: Automation & Rules */}
+          {activeTab === 'automate' && (
+            <View style={styles.automateSection}>
+              {/* Autonomy Level */}
+              <View style={styles.formCard}>
+                <Text style={[styles.formCardHeading, { color: colors.text }]}>Autonomy Level</Text>
+                <Text style={[styles.formCardSub, { color: colors.textMuted }]}>
+                  Define how AI acts when high-fit matches are discovered
+                </Text>
+
+                <View style={styles.autonomyOptions}>
+                  {[
+                    { id: 'auto', title: 'Full Autonomous Apply', desc: 'Dispatches tailored proposal immediately upon detection' },
+                    { id: 'approve', title: 'Semi-Autonomous (Approve First)', desc: 'Prepares proposal draft and waits for your 1-tap confirmation' },
+                    { id: 'notify', title: 'Passive Monitor & Notify', desc: 'Alerts you via push / WhatsApp with match summary' },
+                  ].map((level) => {
+                    const isSelected = editedAutonomy === level.id;
+                    return (
+                      <TouchableOpacity
+                        key={level.id}
+                        style={[
+                          styles.autonomyCard,
+                          {
+                            backgroundColor: isSelected
+                              ? isDark
+                                ? 'rgba(255, 102, 0, 0.12)'
+                                : '#FFF6F0'
+                              : isDark
+                              ? colors.card
+                              : '#FFFFFF',
+                            borderColor: isSelected ? colors.accent : colors.border,
+                          },
+                        ]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setEditedAutonomy(level.id as any);
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.autonomyTitle,
+                              {
+                                color: isSelected ? colors.accent : colors.text,
+                                fontFamily: isSelected ? FONTS.bold : FONTS.semibold,
+                              },
+                            ]}
+                          >
+                            {level.title}
+                          </Text>
+                          <Text style={[styles.autonomyDesc, { color: colors.textMuted }]}>
+                            {level.desc}
+                          </Text>
+                        </View>
+                        {isSelected && <TickCircle size={18} color={colors.accent} variant="Bold" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
-              {/* Natural Query Prompt */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Search Query</Text>
-                <TextInput
-                  style={[
-                    styles.multilineInput,
-                    {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      borderColor: colors.border,
-                      color: colors.text,
-                      fontFamily: FONTS.regular,
-                    },
-                  ]}
-                  multiline
-                  numberOfLines={4}
-                  value={editedPrompt}
-                  onChangeText={setEditedPrompt}
-                  placeholder="Describe criteria, skills, and rates…"
-                  placeholderTextColor={colors.textMuted}
-                  textAlignVertical="top"
-                />
-              </View>
+              {/* Schedule Frequency Cadence */}
+              <View style={styles.formCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <Text style={[styles.formCardHeading, { color: colors.text }]}>Scan Frequency</Text>
+                  {editedFrequency === 'custom' && customCadenceDate ? (
+                    <TouchableOpacity onPress={() => setIsCustomCadenceOpen(true)}>
+                      <Text style={{ fontFamily: FONTS.semiBold, fontSize: 12, color: colors.accent }}>
+                        Edit Timing ✎
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <Text style={[styles.formCardSub, { color: colors.textMuted }]}>
+                  {editedFrequency === 'custom' && customCadenceDate
+                    ? `Configured: ${customCadenceDate}`
+                    : 'Select how often this autonomous scout scans new listings'}
+                </Text>
 
-              {/* Frequency */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Frequency</Text>
                 <View style={styles.freqRow}>
-                  {(['daily', 'weekdays', 'weekly'] as const).map((freq) => {
+                  {(['weekdays', 'daily', 'weekly', 'custom'] as const).map((freq) => {
                     const isSelected = editedFrequency === freq;
                     return (
                       <TouchableOpacity
@@ -527,7 +474,11 @@ export default function RadarDetailScreen() {
                         ]}
                         onPress={() => {
                           Haptics.selectionAsync();
-                          setEditedFrequency(freq);
+                          if (freq === 'custom') {
+                            setIsCustomCadenceOpen(true);
+                          } else {
+                            setEditedFrequency(freq);
+                          }
                         }}
                       >
                         <Text
@@ -539,7 +490,7 @@ export default function RadarDetailScreen() {
                             },
                           ]}
                         >
-                          {freq === 'weekdays' ? 'Weekdays' : freq === 'daily' ? 'Daily' : 'Weekly'}
+                          {freq.toUpperCase()}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -547,69 +498,167 @@ export default function RadarDetailScreen() {
                 </View>
               </View>
 
-              <Button
-                title="Save Changes"
-                variant="accent"
-                size="md"
-                onPress={handleSaveEdits}
-                style={{ marginTop: 8 }}
-              />
+              {/* Toggles */}
+              <View style={styles.formCard}>
+                <View style={styles.toggleItem}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.toggleHeading, { color: colors.text }]}>Instant Push Alerts</Text>
+                    <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
+                      Notify as soon as 90%+ match is confirmed
+                    </Text>
+                  </View>
+                  <Switch
+                    value={instantAlerts}
+                    onValueChange={setInstantAlerts}
+                    trackColor={{ false: '#334155', true: colors.accent }}
+                  />
+                </View>
 
-              {/* Options */}
-              <View style={[styles.optionsGroup, { borderTopColor: colors.borderSubtle }]}>
-                <TouchableOpacity
-                  style={[
-                    styles.optionRow,
-                    { backgroundColor: isDark ? colors.card : '#FFFFFF', borderColor: colors.border },
-                  ]}
-                  onPress={handleDuplicate}
-                  activeOpacity={0.75}
-                >
-                  <DocumentCopy size={18} color={colors.text} variant="Linear" />
-                  <Text style={[styles.optionRowText, { color: colors.text }]}>Duplicate Radar</Text>
-                  <ArrowRight2 size={14} color={colors.textMuted} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.optionRow,
-                    { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5', marginTop: 10 },
-                  ]}
-                  onPress={handleDelete}
-                  activeOpacity={0.75}
-                >
-                  <Trash size={18} color="#EF4444" variant="Bold" />
-                  <Text style={[styles.optionRowText, { color: '#EF4444', fontFamily: FONTS.bold }]}>
-                    Delete Radar
-                  </Text>
-                  <ArrowRight2 size={14} color="#EF4444" />
-                </TouchableOpacity>
+                <View style={[styles.toggleItem, { borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: 10, marginTop: 4 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.toggleHeading, { color: colors.text }]}>Filter Duplicates</Text>
+                    <Text style={[styles.toggleDesc, { color: colors.textMuted }]}>
+                      Suppress roles reposted on alternate boards
+                    </Text>
+                  </View>
+                  <Switch
+                    value={filterDuplicates}
+                    onValueChange={setFilterDuplicates}
+                    trackColor={{ false: '#334155', true: colors.accent }}
+                  />
+                </View>
               </View>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: colors.accent }]}
+                onPress={handleSaveEdits}
+              >
+                <Text style={styles.saveBtnText}>Save Automation Rules</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Tab 3: Edit Query */}
+          {activeTab === 'edit' && (
+            <View style={styles.editSection}>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Radar Title</Text>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  value={editedTitle}
+                  onChangeText={setEditedTitle}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>Natural Language Scout Query</Text>
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    {
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      borderColor: colors.border,
+                      color: colors.text,
+                      minHeight: 90,
+                    },
+                  ]}
+                  value={editedPrompt}
+                  onChangeText={setEditedPrompt}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: colors.accent }]}
+                onPress={handleSaveEdits}
+              >
+                <Text style={styles.saveBtnText}>Update Radar Spec</Text>
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
+      </KeyboardAvoidingView>
 
-        {/* Sticky Clean Bottom Scan Trigger Bar */}
-        <View
-          style={[
-            styles.bottomStickyBar,
-            {
-              backgroundColor: isDark ? colors.surface : '#FFFFFF',
-              borderTopColor: colors.borderSubtle,
-            },
-          ]}
-        >
+      {/* Custom Date Time Picker Sheet (Replaces raw alerts for scheduling) */}
+      {schedulingOpp && (
+        <CustomDateTimePickerSheet
+          visible={!!schedulingOpp}
+          onClose={() => setSchedulingOpp(null)}
+          title={`Schedule for ${schedulingOpp.organization}`}
+          subtitle={schedulingOpp.title}
+          onConfirm={(scheduledDate, objective) => {
+            scheduleFollowUp(schedulingOpp.id, scheduledDate, objective);
+            setNoticeSheet({
+              visible: true,
+              title: 'Follow-Up Scheduled & Synced',
+              subtitle: `Reminder cadence set for ${scheduledDate} (${objective}). Added to your active pipeline.`,
+            });
+          }}
+        />
+      )}
+
+      {/* Custom Scan Frequency Picker Sheet */}
+      <CustomDateTimePickerSheet
+        visible={isCustomCadenceOpen}
+        onClose={() => setIsCustomCadenceOpen(false)}
+        title="Configure Radar Scan Cadence"
+        subtitle={`Set custom execution timing for "${radar.title}"`}
+        showObjective={false}
+        confirmText="Save Scan Timing"
+        onConfirm={(date) => {
+          setEditedFrequency('custom');
+          setCustomCadenceDate(date);
+          setIsCustomCadenceOpen(false);
+          setRadar((prev) => ({
+            ...prev,
+            frequency: 'custom',
+            scheduleDescription: `Custom: ${date}`,
+          }));
+          setNoticeSheet({
+            visible: true,
+            title: 'Scan Frequency Updated',
+            subtitle: `Autonomous scout for "${radar.title}" scheduled for ${date}.`,
+          });
+        }}
+      />
+
+      {/* Confirmation Notification BottomSheet (Zero raw alerts) */}
+      <BottomSheet
+        visible={noticeSheet.visible}
+        onClose={() => setNoticeSheet({ ...noticeSheet, visible: false })}
+        title={noticeSheet.title}
+        subtitle={noticeSheet.subtitle}
+        icon={<TickCircle size={22} color={colors.accent} variant="Bold" />}
+      >
+        <View style={{ paddingVertical: SPACING.xs }}>
           <Button
-            title={isScanning ? 'Scanning Live Sources…' : 'Scan Now'}
+            title="Done"
             variant="accent"
-            size="lg"
-            isLoading={isScanning}
-            leftIcon={!isScanning ? <Play size={17} color="#FFFFFF" variant="Bold" /> : undefined}
-            onPress={handleRunScan}
-            style={{ width: '100%' }}
+            size="md"
+            onPress={() => setNoticeSheet({ ...noticeSheet, visible: false })}
           />
         </View>
-      </KeyboardAvoidingView>
+      </BottomSheet>
+
+      {/* Delete Confirmation Sheet (ConfirmBottomSheet) */}
+      <ConfirmBottomSheet
+        visible={isDeleteSheetOpen}
+        onCancel={() => setIsDeleteSheetOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Radar?"
+        description={`Are you sure you want to delete "${radar.title}"? Autonomous background scanning for this query will be discontinued.`}
+        confirmText="Delete Radar"
+        variant="destructive"
+      />
     </SafeAreaView>
   );
 }
@@ -622,176 +671,168 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
   },
-  navBtn: {
+  roundBtn: {
     width: 38,
     height: 38,
-    borderRadius: BORDER_RADIUS.full,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  titleWrapper: {
+  headerTitleWrap: {
     flex: 1,
     marginHorizontal: 10,
-    alignItems: 'center',
   },
-  pageTitle: {
+  headerScreenTitle: {
     fontSize: 16,
     fontFamily: FONTS.bold,
   },
-  pageSub: {
+  headerScreenSub: {
     fontSize: 11.5,
     fontFamily: FONTS.regular,
   },
-  tabBar: {
+  headerActionsRight: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    paddingHorizontal: SPACING.sm,
-  },
-  tabItem: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-  },
-  tabItemText: {
-    fontSize: 12.5,
-  },
-  keyboardAvoid: {
-    flex: 1,
+    gap: 8,
   },
   scrollContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
+    padding: SPACING.md,
+    gap: 14,
   },
-  metricRow: {
+  heroCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    padding: SPACING.md,
+    gap: 12,
+  },
+  heroTopRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: SPACING.md,
-  },
-  metricBox: {
-    flex: 1,
-    padding: 12,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  metricNumber: {
-    fontSize: 18,
+  heroLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  radarIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroRadarTitle: {
+    fontSize: 16,
     fontFamily: FONTS.bold,
-    marginBottom: 2,
   },
-  metricLabel: {
-    fontSize: 10.5,
-    fontFamily: FONTS.regular,
+  heroFrequency: {
+    fontSize: 12,
+    marginTop: 2,
   },
-  promptCard: {
-    padding: 14,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    marginBottom: SPACING.lg,
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  promptCardLabel: {
-    fontSize: 11.5,
-    fontFamily: FONTS.medium,
-    marginBottom: 4,
+  pulseBeacon: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
-  promptCardText: {
+  heroPromptQuote: {
     fontSize: 13.5,
     fontFamily: FONTS.regular,
     fontStyle: 'italic',
     lineHeight: 20,
   },
-  listSection: {
-    marginTop: 2,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontFamily: FONTS.bold,
-    marginBottom: 8,
-  },
-  sectionWrap: {
-    marginTop: SPACING.lg,
-  },
-  cardRow: {
+  heroFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
+    paddingTop: 10,
+    borderTopWidth: 1,
   },
-  cardRowTitle: {
-    fontSize: 14.5,
-    fontFamily: FONTS.bold,
-    marginBottom: 2,
+  heroMetricItem: {
+    alignItems: 'flex-start',
   },
-  cardRowSub: {
-    fontSize: 12,
-    fontFamily: FONTS.regular,
-  },
-  modeCard: {
-    padding: 14,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1.5,
-    marginBottom: 8,
-  },
-  modeCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  modeCardName: {
-    fontSize: 14,
+  metricNumber: {
+    fontSize: 16,
     fontFamily: FONTS.bold,
   },
-  modeCardDesc: {
-    fontSize: 12,
-    fontFamily: FONTS.regular,
-    lineHeight: 17,
-  },
-  toggleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-  },
-  toggleCardTitle: {
-    fontSize: 13,
-    fontFamily: FONTS.semibold,
-    marginBottom: 2,
-  },
-  toggleCardSub: {
+  metricLabel: {
     fontSize: 11,
     fontFamily: FONTS.regular,
   },
-  inputGroup: {
-    marginBottom: SPACING.md,
-  },
-  fieldLabel: {
-    fontSize: 12.5,
-    fontFamily: FONTS.semibold,
-    marginBottom: 6,
-  },
-  textInput: {
-    height: 48,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
+  heroScanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 14,
-    fontSize: 14,
-  },
-  multilineInput: {
-    minHeight: 90,
+    paddingVertical: 8,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
+  },
+  heroScanBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontFamily: FONTS.bold,
+  },
+  tabBarWrap: {
+    flexDirection: 'row',
+    borderRadius: BORDER_RADIUS.lg,
+    padding: 3,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  tabBtnText: {
+    fontSize: 12.5,
+  },
+  feedSection: {
+    gap: 10,
+  },
+  automateSection: {
+    gap: 14,
+  },
+  formCard: {
+    gap: 10,
+  },
+  formCardHeading: {
+    fontSize: 13.5,
+    fontFamily: FONTS.bold,
+  },
+  formCardSub: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  autonomyOptions: {
+    gap: 8,
+    marginTop: 2,
+  },
+  autonomyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 12,
-    fontSize: 14,
-    lineHeight: 20,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1.2,
+  },
+  autonomyTitle: {
+    fontSize: 13.5,
+  },
+  autonomyDesc: {
+    fontSize: 11.5,
+    marginTop: 2,
   },
   freqRow: {
     flexDirection: 'row',
@@ -799,41 +840,56 @@ const styles = StyleSheet.create({
   },
   freqBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  freqBtnText: {
-    fontSize: 12,
-  },
-  optionsGroup: {
-    marginTop: SPACING.xl,
-    paddingTop: SPACING.lg,
-    borderTopWidth: 1,
-  },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
+    paddingVertical: 8,
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
+  },
+  freqBtnText: {
+    fontSize: 11.5,
+  },
+  toggleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
   },
-  optionRowText: {
+  toggleHeading: {
     fontSize: 13.5,
-    fontFamily: FONTS.medium,
-    flex: 1,
+    fontFamily: FONTS.semibold,
   },
-  bottomStickyBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-    borderTopWidth: 1,
+  toggleDesc: {
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  editSection: {
+    gap: 12,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 12.5,
+    fontFamily: FONTS.semibold,
+  },
+  textInput: {
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  saveBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: BORDER_RADIUS.md,
+    marginTop: 6,
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontFamily: FONTS.bold,
   },
 });

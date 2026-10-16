@@ -6,801 +6,495 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
-  TextInput,
+  Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { Button, Card, Badge, BottomSheet } from '@/components/ui';
+import { Card, Badge, ConfirmBottomSheet, AvatarCoverPickerSheet } from '@/components/ui';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
 import {
   User,
-  Camera,
-  DocumentUpload,
   TickCircle,
-  Flash,
-  Edit2,
-  Trash,
-  Add,
-  Global,
-  Code,
-  Link2,
-  Moon,
-  Sun,
+  ArrowRight2,
+  Briefcase,
   Setting2,
-  LogoutCurve,
+  DirectInbox,
   SecuritySafe,
-  DollarCircle,
+  Sun,
+  Moon,
+  LogoutCurve,
+  Camera,
+  Edit2,
+  Flash,
+  ShieldSecurity,
 } from 'iconsax-react-native';
 import * as Haptics from 'expo-haptics';
-import type { AutonomyLevel } from '@prospect/types';
 
-interface StoredCV {
-  id: string;
-  name: string;
-  size: string;
-  uploadedAt: string;
-  isPrimary: boolean;
-  tags: string[];
-}
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const COVER_HEIGHT = 160;
 
-const AVATAR_GALLERY = [
-  { id: 'av-1', label: 'Executive', uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&fit=crop&q=80' },
-  { id: 'av-2', label: 'Tech Lead', uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&fit=crop&q=80' },
-  { id: 'av-3', label: 'AI Specialist', uri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&fit=crop&q=80' },
-  { id: 'av-4', label: 'Architect', uri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&fit=crop&q=80' },
-  { id: 'av-5', label: 'Creative', uri: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&fit=crop&q=80' },
-];
-
-const COVER_PRESETS = [
-  { id: 'cov-1', label: 'Executive Navy', colors: ['#14213D', '#0077B6'] },
-  { id: 'cov-2', label: 'Solar Flare', colors: ['#FF6600', '#14213D'] },
-  { id: 'cov-3', label: 'Ocean Depths', colors: ['#0077B6', '#0F172A'] },
-  { id: 'cov-4', label: 'Deep Cyber', colors: ['#1E293B', '#3B82F6'] },
-];
+const DEFAULT_COVER =
+  'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80';
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { colors, themePreference, setThemePreference, isDark } = useTheme();
-  const { user, logout, updateUser } = useAuth();
+  const { user, logout } = useAuth();
 
-  // Multi-CV state
-  const [cvList, setCvList] = useState<StoredCV[]>([
-    {
-      id: 'cv-1',
-      name: 'Principal Mobile Architect (2026).pdf',
-      size: '1.4 MB',
-      uploadedAt: 'Updated Today',
-      isPrimary: true,
-      tags: ['Expo 57', 'React Native 0.86', 'TypeScript'],
-    },
-    {
-      id: 'cv-2',
-      name: 'Fintech & Ledger Consultant Profile.pdf',
-      size: '890 KB',
-      uploadedAt: 'Oct 8, 2026',
-      isPrimary: false,
-      tags: ['Double-Entry Ledger', 'ACID', 'Security'],
-    },
-    {
-      id: 'cv-3',
-      name: 'Fullstack AI Lead Pitch Deck.pdf',
-      size: '3.1 MB',
-      uploadedAt: 'Sep 29, 2026',
-      isPrimary: false,
-      tags: ['Next.js 15', 'Node 20 ESM', 'Redis'],
-    },
-  ]);
-
-  // Credit balance state
-  const [credits, setCredits] = useState(485);
-  const [autonomyLevel, setAutonomyLevel] = useState<AutonomyLevel>(user?.autonomyLevel || 'approve');
-
-  // Active cover preset
-  const [activeCover, setActiveCover] = useState(COVER_PRESETS[0]);
-
-  // Modals & Sheets
-  const [isAvatarSheetOpen, setIsAvatarSheetOpen] = useState(false);
-  const [isAddCvSheetOpen, setIsAddCvSheetOpen] = useState(false);
-  const [isTopUpSheetOpen, setIsTopUpSheetOpen] = useState(false);
+  const [coverUrl, setCoverUrl] = useState<string>(DEFAULT_COVER);
+  const [avatarUrl, setAvatarUrl] = useState<string>(user?.avatarUrl || DEFAULT_AVATAR);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [pickerInitialTab, setPickerInitialTab] = useState<'avatar' | 'cover'>('avatar');
   const [isSignOutSheetOpen, setIsSignOutSheetOpen] = useState(false);
 
-  // New CV form
-  const [newCvName, setNewCvName] = useState('');
-  const [newCvTags, setNewCvTags] = useState('React Native, Staff Level');
-
   const userName = user?.name || 'Alex Rivers';
-  const userEmail = user?.email || 'alex@example.com';
-  const avatarUrl = user?.avatarUrl;
+  const userEmail = user?.email || 'alex.rivers@prospectai.dev';
 
-  const handleSetPrimaryCV = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCvList((prev) =>
-      prev.map((cv) => ({
-        ...cv,
-        isPrimary: cv.id === id,
-      }))
-    );
-  };
-
-  const handleDeleteCV = (id: string) => {
+  const handleNavigate = (route: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCvList((prev) => prev.filter((cv) => cv.id !== id));
+    router.push(route as any);
   };
 
-  const handleSelectAvatar = (uri: string) => {
+  const openAvatarPicker = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    updateUser({ avatarUrl: uri });
-    setIsAvatarSheetOpen(false);
+    setPickerInitialTab('avatar');
+    setIsPickerOpen(true);
   };
 
-  const handleAddCV = () => {
-    if (!newCvName.trim()) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const added: StoredCV = {
-      id: `cv-${Date.now()}`,
-      name: newCvName.endsWith('.pdf') ? newCvName : `${newCvName}.pdf`,
-      size: '1.2 MB',
-      uploadedAt: 'Just Now',
-      isPrimary: cvList.length === 0,
-      tags: newCvTags.split(',').map((t) => t.trim()).filter(Boolean),
-    };
-    setCvList([added, ...cvList]);
-    setNewCvName('');
-    setIsAddCvSheetOpen(false);
-  };
-
-  const handleTopUpConfirm = (amount: number) => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setCredits((c) => c + amount);
-    setIsTopUpSheetOpen(false);
+  const openCoverPicker = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPickerInitialTab('cover');
+    setIsPickerOpen(true);
   };
 
   const handleConfirmLogout = async () => {
     setIsSignOutSheetOpen(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await logout();
     router.replace('/(auth)/landing');
   };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* Scrollable View without Sticky Header */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 130 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Cover Banner */}
-        <View
-          style={[
-            styles.coverBanner,
-            { backgroundColor: activeCover.colors[0] },
-          ]}
-        >
-          <View
-            style={[
-              styles.coverGradientOverlay,
-              { backgroundColor: activeCover.colors[1] + '80' },
-            ]}
-          />
+        {/* Banner Cover Container */}
+        <View style={[styles.coverContainer, { paddingTop: insets.top }]}>
+          <Image source={{ uri: coverUrl }} style={styles.coverImage} resizeMode="cover" />
+          <View style={styles.coverScrim} />
 
+          {/* Change Cover Button */}
           <TouchableOpacity
-            style={styles.changeCoverBtn}
-            onPress={() => setIsAvatarSheetOpen(true)}
+            style={styles.editCoverBtn}
+            onPress={openCoverPicker}
             activeOpacity={0.8}
           >
-            <Camera size={14} color="#FFF" variant="Bold" />
-            <Text style={styles.changeCoverText}>Edit Cover & Avatar</Text>
+            <Camera size={14} color="#FFFFFF" variant="Bold" />
+            <Text style={styles.editCoverText}>Edit Cover</Text>
           </TouchableOpacity>
+
+          {/* Free Edition Tag floating on cover */}
+          <View style={[styles.badgeFloat, { top: insets.top + 12 }]}>
+            <Badge label="100% Free Edition" variant="accent" size="sm" />
+          </View>
         </View>
 
-        {/* Profile Card Overlay Header */}
-        <View style={styles.profileMetaContainer}>
-          {/* Avatar with Camera Badge */}
-          <TouchableOpacity
-            style={[
-              styles.avatarContainer,
-              {
-                borderColor: colors.background,
-                backgroundColor: isDark ? colors.card : '#FFFFFF',
-              },
-            ]}
-            onPress={() => setIsAvatarSheetOpen(true)}
-            activeOpacity={0.85}
-          >
-            {avatarUrl ? (
+        {/* User Identity Section Overlapping Cover */}
+        <View style={styles.identitySection}>
+          <View style={styles.avatarRow}>
+            {/* User Avatar with Border & Camera Badge */}
+            <TouchableOpacity
+              style={[
+                styles.avatarWrap,
+                {
+                  borderColor: isDark ? colors.background : '#FFFFFF',
+                  backgroundColor: colors.surface,
+                },
+              ]}
+              onPress={openAvatarPicker}
+              activeOpacity={0.85}
+            >
               <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
-            ) : (
-              <View
-                style={[
-                  styles.avatarFallback,
-                  { backgroundColor: colors.accent + '25' },
-                ]}
-              >
-                <Text style={[styles.avatarFallbackText, { color: colors.accent }]}>
-                  {userName.charAt(0)}
-                </Text>
+              <View style={[styles.cameraBadge, { backgroundColor: colors.accent }]}>
+                <Camera size={13} color="#FFFFFF" variant="Bold" />
               </View>
-            )}
+            </TouchableOpacity>
 
-            <View style={[styles.cameraBadge, { backgroundColor: colors.accent }]}>
-              <Camera size={12} color="#FFF" variant="Bold" />
-            </View>
-          </TouchableOpacity>
+            {/* Quick Action Button Next to Avatar */}
+            <TouchableOpacity
+              style={[
+                styles.editProfileBtn,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: isDark ? colors.card : '#FFFFFF',
+                },
+              ]}
+              onPress={() => handleNavigate('/profile/personal')}
+              activeOpacity={0.8}
+            >
+              <Edit2 size={14} color={colors.text} variant="Linear" />
+              <Text style={[styles.editProfileText, { color: colors.text }]}>
+                Edit Profile
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* User Details */}
-          <View style={styles.userTextBlock}>
-            <View style={styles.nameRow}>
+          <View style={styles.detailsWrap}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={[styles.userName, { color: colors.text }]}>
                 {userName}
               </Text>
-              <TickCircle size={18} color={colors.accent} variant="Bold" />
+              <TickCircle size={20} color="#10B981" variant="Bold" />
             </View>
 
             <Text style={[styles.userHeadline, { color: colors.textSecondary }]}>
-              Principal Mobile Architect · Expo & React Native
+              Principal Mobile Architect & Distributed Systems
             </Text>
 
             <Text style={[styles.userEmail, { color: colors.textMuted }]}>
-              {userEmail} · Remote Worldwide (US/EMEA Async)
+              {userEmail}
             </Text>
 
-            <View style={styles.badgeRow}>
-              <Badge label="Verified Profile" variant="success" size="sm" dot />
-              <Badge label="Autonomous Tier" variant="accent" size="sm" />
-              <Badge label="$120/hr Rate Floor" variant="neutral" size="sm" />
-            </View>
-          </View>
-        </View>
-
-        {/* AI Credit Balance CTA Card */}
-        <View
-          style={[
-            styles.creditCtaCard,
-            { backgroundColor: isDark ? colors.card : '#14213D' },
-          ]}
-        >
-          <View style={styles.creditTopRow}>
-            <View style={styles.creditBadgeWrap}>
-              <Flash size={14} color="#FF6600" variant="Bold" />
-              <Text style={styles.creditBadgeText}>LEDGER BALANCE</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.refillPillBtn}
-              onPress={() => setIsTopUpSheetOpen(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.refillBtnText}>+ Top Up Credits</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.creditValueRow}>
-            <Text style={styles.creditValue}>{credits}</Text>
-            <Text style={styles.creditLabel}>AI Credits Available</Text>
-          </View>
-
-          <Text style={styles.creditSub}>
-            Autonomous radars and personalized proposal outreach draw from your double-entry audited wallet.
-          </Text>
-        </View>
-
-        {/* Multi-CV Career Intelligence Section */}
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Career Intelligence & CVs
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-                Our AI references the Primary CV for radar matching & pitch drafts.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.addCvBtn, { backgroundColor: colors.accent }]}
-              onPress={() => setIsAddCvSheetOpen(true)}
-              activeOpacity={0.85}
-            >
-              <Add size={16} color="#FFF" variant="Linear" />
-              <Text style={styles.addCvBtnText}>Add CV</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* CV Cards List */}
-          <View style={styles.cvCardsList}>
-            {cvList.map((cv) => (
-              <Card
-                key={cv.id}
-                variant="elevated"
+            {/* Location & Status Pills */}
+            <View style={styles.pillsRow}>
+              <View
                 style={[
-                  styles.cvCard,
-                  cv.isPrimary && {
-                    borderColor: colors.accent,
-                    borderWidth: 1.5,
-                  },
+                  styles.pill,
+                  { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
                 ]}
               >
-                <View style={styles.cvHeaderRow}>
-                  <View
-                    style={[
-                      styles.cvIconWrap,
-                      {
-                        backgroundColor: cv.isPrimary
-                          ? colors.accent + '20'
-                          : isDark
-                          ? colors.surfaceSecondary
-                          : '#F3F5F9',
-                      },
-                    ]}
-                  >
-                    <DocumentUpload
-                      size={20}
-                      color={cv.isPrimary ? colors.accent : colors.textMuted}
-                      variant={cv.isPrimary ? 'Bold' : 'Linear'}
-                    />
-                  </View>
-
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text
-                      style={[
-                        styles.cvName,
-                        {
-                          color: colors.text,
-                          fontFamily: cv.isPrimary ? FONTS.bold : FONTS.semibold,
-                        },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {cv.name}
-                    </Text>
-                    <Text style={[styles.cvMeta, { color: colors.textMuted }]}>
-                      {cv.size} · {cv.uploadedAt}
-                    </Text>
-                  </View>
-
-                  {cv.isPrimary ? (
-                    <Badge label="Primary Active" variant="accent" size="sm" dot />
-                  ) : (
-                    <TouchableOpacity
-                      style={[
-                        styles.setPrimaryBtn,
-                        {
-                          backgroundColor: isDark
-                            ? colors.surfaceSecondary
-                            : '#EEF2F6',
-                        },
-                      ]}
-                      onPress={() => handleSetPrimaryCV(cv.id)}
-                    >
-                      <Text
-                        style={[styles.setPrimaryText, { color: colors.textSecondary }]}
-                      >
-                        Set Primary
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* CV Skill Tag Chips */}
-                <View style={styles.cvTagsRow}>
-                  {cv.tags.map((tag, idx) => (
-                    <View
-                      key={idx}
-                      style={[
-                        styles.cvTagChip,
-                        {
-                          backgroundColor: isDark
-                            ? colors.surfaceSecondary
-                            : '#F8FAFC',
-                          borderColor: colors.borderSubtle,
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.cvTagText, { color: colors.textSecondary }]}>
-                        {tag}
-                      </Text>
-                    </View>
-                  ))}
-
-                  {cvList.length > 1 && !cv.isPrimary && (
-                    <TouchableOpacity
-                      onPress={() => handleDeleteCV(cv.id)}
-                      style={styles.deleteCvBtn}
-                    >
-                      <Trash size={14} color={colors.error} variant="Linear" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </Card>
-            ))}
+                <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+                  📍 San Francisco · Remote
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.pill,
+                  { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5' },
+                ]}
+              >
+                <Text style={[styles.pillText, { color: '#10B981', fontFamily: FONTS.semiBold }]}>
+                  ⚡ Radar Active (124 streams)
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        {/* Portfolio & Verified Materials */}
-        <View style={styles.sectionBlock}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Portfolio & Verification Links
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-            Referenced during AI outreach to substantiate capability.
-          </Text>
-
-          <Card variant="elevated" style={styles.linksCard}>
-            <View style={styles.linkRow}>
-              <Code size={18} color={colors.accent} variant="Bold" />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.linkTitle, { color: colors.text }]}>
-                  GitHub Profile
-                </Text>
-                <Text style={[styles.linkValue, { color: colors.textMuted }]}>
-                  github.com/alex-rivers-arch
+        {/* Profile Completeness & Free Launch Callout */}
+        <View style={styles.sectionWrap}>
+          <Card
+            style={[
+              styles.completenessCard,
+              {
+                backgroundColor: isDark ? '#1E293B' : '#F0FDF4',
+                borderColor: isDark ? '#334155' : '#BBF7D0',
+              },
+            ]}
+          >
+            <View style={styles.completenessHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TickCircle size={18} color="#10B981" variant="Bold" />
+                <Text
+                  style={[
+                    styles.completenessTitle,
+                    { color: isDark ? '#F1F5F9' : '#14532D' },
+                  ]}
+                >
+                  AI Match Profile Completeness
                 </Text>
               </View>
-              <Badge label="Synced" variant="success" size="sm" />
+              <Text style={[styles.completenessPercent, { color: '#10B981' }]}>
+                85%
+              </Text>
             </View>
 
-            <View style={[styles.linkDivider, { backgroundColor: colors.borderSubtle }]} />
+            {/* Progress Bar */}
+            <View
+              style={[
+                styles.progressBarBg,
+                { backgroundColor: isDark ? '#334155' : '#DCFCE7' },
+              ]}
+            >
+              <View style={[styles.progressBarFill, { width: '85%', backgroundColor: '#10B981' }]} />
+            </View>
 
-            <View style={styles.linkRow}>
-              <Global size={18} color={colors.accent} variant="Bold" />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.linkTitle, { color: colors.text }]}>
-                  Engineering Blog & Architecture Case Studies
+            <Text
+              style={[
+                styles.completenessSub,
+                { color: isDark ? '#94A3B8' : '#166534' },
+              ]}
+            >
+              ✨ Zero-Cost Launch: Zero subscription fees. Automated discovery, continuous scrapers, and personal agent alerts are fully unlocked.
+            </Text>
+          </Card>
+        </View>
+
+        {/* Section 1: Identity & Career Materials */}
+        <View style={styles.sectionWrap}>
+          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
+            IDENTITY & CAREER MATERIALS
+          </Text>
+
+          <Card
+            style={[
+              styles.menuCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleNavigate('/profile/personal')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconWrap, { backgroundColor: '#3B82F615' }]}>
+                <User size={20} color="#3B82F6" variant="Bold" />
+              </View>
+              <View style={styles.menuTextWrap}>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>
+                  Personal Information
                 </Text>
-                <Text style={[styles.linkValue, { color: colors.textMuted }]}>
-                  alexrivers.io/work
+                <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>
+                  Display name, verified contacts, location & locale
                 </Text>
               </View>
-              <Badge label="Verified" variant="accent" size="sm" />
+              <ArrowRight2 size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={[styles.itemDivider, { backgroundColor: colors.borderSubtle }]} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleNavigate('/profile/career')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconWrap, { backgroundColor: '#FF660015' }]}>
+                <Briefcase size={20} color={colors.accent} variant="Bold" />
+              </View>
+              <View style={styles.menuTextWrap}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.menuTitle, { color: colors.text }]}>
+                    Experience, CV & Materials
+                  </Text>
+                </View>
+                <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>
+                  CV upload & preview, experience history, portfolios & skills
+                </Text>
+              </View>
+              <ArrowRight2 size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </Card>
+        </View>
+
+        {/* Section 2: Opportunity Matching & Channels */}
+        <View style={styles.sectionWrap}>
+          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
+            DISCOVERY & CHANNELS
+          </Text>
+
+          <Card
+            style={[
+              styles.menuCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleNavigate('/profile/preferences')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconWrap, { backgroundColor: '#10B98115' }]}>
+                <Setting2 size={20} color="#10B981" variant="Bold" />
+              </View>
+              <View style={styles.menuTextWrap}>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>
+                  Opportunity Matching Preferences
+                </Text>
+                <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>
+                  Categories, salary floor, remote filters & threshold
+                </Text>
+              </View>
+              <ArrowRight2 size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={[styles.itemDivider, { backgroundColor: colors.borderSubtle }]} />
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleNavigate('/profile/connections')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconWrap, { backgroundColor: '#0088cc15' }]}>
+                <DirectInbox size={20} color="#0088cc" variant="Bold" />
+              </View>
+              <View style={styles.menuTextWrap}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.menuTitle, { color: colors.text }]}>
+                    Connected Channels
+                  </Text>
+                  <Badge label="Telegram · WhatsApp" variant="success" size="sm" />
+                </View>
+                <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>
+                  Telegram Bot, WhatsApp Agent, Email & Push alerts
+                </Text>
+              </View>
+              <ArrowRight2 size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </Card>
+        </View>
+
+        {/* Section 3: Privacy & Security */}
+        <View style={styles.sectionWrap}>
+          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
+            SECURITY & PRIVACY
+          </Text>
+
+          <Card
+            style={[
+              styles.menuCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => handleNavigate('/profile/security')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconWrap, { backgroundColor: '#8B5CF615' }]}>
+                <SecuritySafe size={20} color="#8B5CF6" variant="Bold" />
+              </View>
+              <View style={styles.menuTextWrap}>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>
+                  Security & Data Privacy
+                </Text>
+                <Text style={[styles.menuSubtitle, { color: colors.textMuted }]}>
+                  Tenant isolation, AI privacy toggle & data export
+                </Text>
+              </View>
+              <ArrowRight2 size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </Card>
+        </View>
+
+        {/* Section 4: Appearance Selector */}
+        <View style={styles.sectionWrap}>
+          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
+            APPEARANCE
+          </Text>
+
+          <Card
+            style={[
+              styles.menuCard,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                padding: 10,
+              },
+            ]}
+          >
+            <View style={styles.themeSelectorRow}>
+              {(['light', 'dark', 'system'] as ThemePreference[]).map((pref) => {
+                const isSelected = themePreference === pref;
+                return (
+                  <TouchableOpacity
+                    key={pref}
+                    style={[
+                      styles.themeBtn,
+                      {
+                        backgroundColor: isSelected
+                          ? colors.accent
+                          : isDark
+                          ? '#0F172A'
+                          : '#EEF2F6',
+                        borderColor: isSelected ? colors.accent : colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setThemePreference(pref);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {pref === 'light' ? (
+                      <Sun size={18} color={isSelected ? '#FFF' : colors.text} variant="Linear" />
+                    ) : pref === 'dark' ? (
+                      <Moon size={18} color={isSelected ? '#FFF' : colors.text} variant="Linear" />
+                    ) : (
+                      <Setting2 size={18} color={isSelected ? '#FFF' : colors.text} variant="Linear" />
+                    )}
+                    <Text
+                      style={[
+                        styles.themeBtnText,
+                        {
+                          color: isSelected ? '#FFF' : colors.text,
+                          fontFamily: isSelected ? FONTS.semiBold : FONTS.medium,
+                        },
+                      ]}
+                    >
+                      {pref.charAt(0).toUpperCase() + pref.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </Card>
         </View>
 
-        {/* AI Autonomy Preferences */}
-        <View style={styles.sectionBlock}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Agent Autonomy Level
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>
-            Controls how autonomously your personal AI acts on matched contracts.
-          </Text>
+        {/* Sign Out Action Button */}
+        <View style={styles.signOutWrap}>
+          <TouchableOpacity
+            style={[
+              styles.signOutBtn,
+              { borderColor: colors.border, backgroundColor: colors.card },
+            ]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setIsSignOutSheetOpen(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <LogoutCurve size={18} color="#EF4444" variant="Bold" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
 
-          <View style={styles.autonomyList}>
-            {[
-              {
-                id: 'automate' as AutonomyLevel,
-                title: 'Full Autonomous Mode',
-                desc: 'Agents qualify matches, prepare tailored proposals, and queue delivery.',
-              },
-              {
-                id: 'approve' as AutonomyLevel,
-                title: 'Review & Approve (Recommended)',
-                desc: 'AI drafts proposals in advance. You review and dispatch with 1 tap.',
-              },
-              {
-                id: 'assist' as AutonomyLevel,
-                title: 'Observer Only',
-                desc: 'Radars only discover and alert you. Proposals require manual trigger.',
-              },
-            ].map((item) => {
-              const isSelected = autonomyLevel === item.id;
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.autonomyOption,
-                    {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      borderColor: isSelected ? colors.accent : colors.border,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setAutonomyLevel(item.id);
-                    updateUser({ autonomyLevel: item.id });
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.autonomyTitle,
-                        {
-                          color: colors.text,
-                          fontFamily: isSelected ? FONTS.bold : FONTS.semibold,
-                        },
-                      ]}
-                    >
-                      {item.title}
-                    </Text>
-                    <Text style={[styles.autonomyDesc, { color: colors.textMuted }]}>
-                      {item.desc}
-                    </Text>
-                  </View>
-                  {isSelected ? (
-                    <TickCircle size={22} color={colors.accent} variant="Bold" />
-                  ) : null}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <Text style={[styles.versionText, { color: colors.textMuted }]}>
+            Leed Platform v2.2.0 · Zero-Cost Launch Edition
+          </Text>
         </View>
-
-        {/* Appearance Settings */}
-        <View style={styles.sectionBlock}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Appearance
-          </Text>
-
-          <View style={styles.themeSelectorRow}>
-            {(['light', 'dark', 'system'] as ThemePreference[]).map((pref) => {
-              const isSelected = themePreference === pref;
-              return (
-                <TouchableOpacity
-                  key={pref}
-                  style={[
-                    styles.themeBtn,
-                    {
-                      backgroundColor: isSelected
-                        ? colors.accent
-                        : isDark
-                        ? colors.card
-                        : '#EEF2F6',
-                      borderColor: isSelected ? colors.accent : colors.border,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setThemePreference(pref);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  {pref === 'light' ? (
-                    <Sun size={18} color={isSelected ? '#FFF' : colors.text} variant="Linear" />
-                  ) : pref === 'dark' ? (
-                    <Moon size={18} color={isSelected ? '#FFF' : colors.text} variant="Linear" />
-                  ) : (
-                    <Setting2 size={18} color={isSelected ? '#FFF' : colors.text} variant="Linear" />
-                  )}
-                  <Text
-                    style={[
-                      styles.themeBtnText,
-                      {
-                        color: isSelected ? '#FFF' : colors.text,
-                        fontFamily: isSelected ? FONTS.bold : FONTS.medium,
-                      },
-                    ]}
-                  >
-                    {pref.charAt(0).toUpperCase() + pref.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Sign Out Button */}
-        <Button
-          title="Sign Out of Session"
-          variant="danger"
-          size="lg"
-          leftIcon={<LogoutCurve size={18} color="#FFFFFF" variant="Linear" />}
-          onPress={() => setIsSignOutSheetOpen(true)}
-          style={{ width: '100%', marginBottom: 20 }}
-        />
       </ScrollView>
 
-      {/* Responsive Avatar & Cover Gallery BottomSheet */}
-      <BottomSheet
-        visible={isAvatarSheetOpen}
-        onClose={() => setIsAvatarSheetOpen(false)}
-        title="Customize Identity"
-        subtitle="Select a representative avatar and cover palette."
-        icon={
-          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
-            <Camera size={20} color={colors.accent} variant="Bold" />
-          </View>
-        }
-      >
-        <View style={{ paddingVertical: SPACING.xs }}>
-          <Text style={[styles.sheetSectionHeading, { color: colors.text }]}>
-            Avatar Gallery
-          </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
-            {AVATAR_GALLERY.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.galleryItem,
-                  avatarUrl === item.uri && { borderColor: colors.accent, borderWidth: 2.5 },
-                ]}
-                onPress={() => handleSelectAvatar(item.uri)}
-              >
-                <Image source={{ uri: item.uri }} style={styles.galleryImg} />
-                <Text style={[styles.galleryLabel, { color: colors.textSecondary }]}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+      {/* Avatar & Cover Banner Selector Sheet */}
+      <AvatarCoverPickerSheet
+        visible={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        initialTab={pickerInitialTab}
+        currentAvatarUrl={avatarUrl}
+        currentCoverUrl={coverUrl}
+        onSelectAvatar={(url) => setAvatarUrl(url)}
+        onSelectCover={(url) => setCoverUrl(url)}
+      />
 
-          <Text style={[styles.sheetSectionHeading, { color: colors.text, marginTop: SPACING.md }]}>
-            Cover Theme
-          </Text>
-          <View style={styles.coverRow}>
-            {COVER_PRESETS.map((cov) => (
-              <TouchableOpacity
-                key={cov.id}
-                style={[
-                  styles.coverOption,
-                  { backgroundColor: cov.colors[0] },
-                  activeCover.id === cov.id && { borderColor: colors.accent, borderWidth: 2.5 },
-                ]}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setActiveCover(cov);
-                }}
-              >
-                <Text style={styles.coverOptionText}>{cov.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </BottomSheet>
-
-      {/* Responsive Add CV BottomSheet */}
-      <BottomSheet
-        visible={isAddCvSheetOpen}
-        onClose={() => setIsAddCvSheetOpen(false)}
-        title="Upload Career Document"
-        subtitle="Add a specialized CV or case study to tailor matching."
-        icon={
-          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
-            <DocumentUpload size={20} color={colors.accent} variant="Bold" />
-          </View>
-        }
-      >
-        <View style={{ paddingVertical: SPACING.xs }}>
-          <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-            Document Title
-          </Text>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: isDark ? colors.surfaceSecondary : '#F3F5F9',
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="e.g. Senior Expo Architecture CV (2026)"
-            placeholderTextColor={colors.textMuted}
-            value={newCvName}
-            onChangeText={setNewCvName}
-          />
-
-          <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: 12 }]}>
-            Key Competencies (comma separated)
-          </Text>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: isDark ? colors.surfaceSecondary : '#F3F5F9',
-                borderColor: colors.border,
-                color: colors.text,
-              },
-            ]}
-            placeholder="e.g. React Native, Expo 57, TypeScript"
-            placeholderTextColor={colors.textMuted}
-            value={newCvTags}
-            onChangeText={setNewCvTags}
-          />
-
-          <View style={styles.sheetActionRow}>
-            <Button
-              title="Cancel"
-              variant="outline"
-              size="md"
-              onPress={() => setIsAddCvSheetOpen(false)}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Save Document"
-              variant="accent"
-              size="md"
-              disabled={!newCvName.trim()}
-              onPress={handleAddCV}
-              style={{ flex: 1.5 }}
-            />
-          </View>
-        </View>
-      </BottomSheet>
-
-      {/* Responsive Top-Up BottomSheet */}
-      <BottomSheet
-        visible={isTopUpSheetOpen}
-        onClose={() => setIsTopUpSheetOpen(false)}
-        title="Refill AI Credits"
-        subtitle="Credits fund autonomous crawlers and personalized drafting."
-        icon={
-          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accent + '20', alignItems: 'center', justifyContent: 'center' }}>
-            <Flash size={20} color={colors.accent} variant="Bold" />
-          </View>
-        }
-      >
-        <View style={{ paddingVertical: SPACING.xs }}>
-          <View style={styles.topUpPacksRow}>
-            {[
-              { amount: 150, price: '$15', bonus: '' },
-              { amount: 350, price: '$30', bonus: '+50 Free' },
-              { amount: 1000, price: '$75', bonus: '+250 Free' },
-            ].map((pack) => (
-              <TouchableOpacity
-                key={pack.amount}
-                style={[
-                  styles.topUpPackCard,
-                  {
-                    backgroundColor: isDark ? colors.surfaceSecondary : '#F8FAFC',
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => handleTopUpConfirm(pack.amount)}
-                activeOpacity={0.8}
-              >
-                {pack.bonus ? (
-                  <View style={styles.bonusBadge}>
-                    <Text style={styles.bonusBadgeText}>{pack.bonus}</Text>
-                  </View>
-                ) : null}
-                <Text style={[styles.packAmount, { color: colors.text }]}>
-                  +{pack.amount}
-                </Text>
-                <Text style={[styles.packLabel, { color: colors.textMuted }]}>
-                  Credits
-                </Text>
-                <Text style={[styles.packPrice, { color: colors.accent }]}>
-                  {pack.price}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </BottomSheet>
-
-      {/* Responsive Sign Out Sheet */}
-      <BottomSheet
+      {/* Sign Out Confirmation BottomSheet (Zero Alerts, Responsive Sheet) */}
+      <ConfirmBottomSheet
         visible={isSignOutSheetOpen}
-        onClose={() => setIsSignOutSheetOpen(false)}
-        title="Sign Out Confirmation"
-        subtitle="Are you sure you want to exit your active session?"
-        icon={
-          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.error + '20', alignItems: 'center', justifyContent: 'center' }}>
-            <LogoutCurve size={20} color={colors.error} variant="Bold" />
-          </View>
-        }
-      >
-        <View style={{ paddingVertical: SPACING.xs }}>
-          <Text style={{ color: colors.textSecondary, fontSize: 13.5, lineHeight: 20, marginBottom: SPACING.lg }}>
-            Your background radars will continue scanning public & partner streams. You can log back in at any time.
-          </Text>
-          <View style={styles.sheetActionRow}>
-            <Button
-              title="Cancel"
-              variant="outline"
-              size="md"
-              onPress={() => setIsSignOutSheetOpen(false)}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="Sign Out"
-              variant="accent"
-              size="md"
-              onPress={handleConfirmLogout}
-              style={{ flex: 1, backgroundColor: colors.error }}
-            />
-          </View>
-        </View>
-      </BottomSheet>
+        title="Sign Out of Leed?"
+        description="Your scheduled background radars and connected channel alerts will continue monitoring real opportunities in the background."
+        confirmText="Sign Out"
+        cancelText="Stay Signed In"
+        variant="destructive"
+        icon={<LogoutCurve size={36} color="#EF4444" variant="Bold" />}
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setIsSignOutSheetOpen(false)}
+      />
     </View>
   );
 }
@@ -810,409 +504,248 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 140, // Generous clearance for floating glass tab bar
+    paddingBottom: 130,
   },
-  coverBanner: {
-    height: 140,
+  coverContainer: {
+    height: COVER_HEIGHT + 40,
     width: '100%',
     position: 'relative',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    padding: SPACING.md,
+    backgroundColor: '#0F172A',
   },
-  coverGradientOverlay: {
-    ...StyleSheet.absoluteFill as any,
+  coverImage: {
+    ...StyleSheet.absoluteFill,
   },
-  changeCoverBtn: {
+  coverScrim: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  editCoverBtn: {
+    position: 'absolute',
+    right: SPACING.md,
+    bottom: SPACING.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BORDER_RADIUS.full,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: BORDER_RADIUS.full,
+    backdropFilter: 'blur(8px)',
   },
-  changeCoverText: {
-    color: '#FFF',
-    fontSize: 11.5,
+  editCoverText: {
+    color: '#FFFFFF',
     fontFamily: FONTS.semibold,
+    fontSize: 12,
   },
-  profileMetaContainer: {
-    paddingHorizontal: SPACING.lg,
-    marginTop: -38,
-    marginBottom: SPACING.lg,
+  badgeFloat: {
+    position: 'absolute',
+    left: SPACING.md,
   },
-  avatarContainer: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+  identitySection: {
+    paddingHorizontal: SPACING.md,
+    marginTop: -44,
+  },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
+  },
+  avatarWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     borderWidth: 3.5,
     position: 'relative',
-    marginBottom: SPACING.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 6,
   },
   avatarImg: {
     width: '100%',
     height: '100%',
-    borderRadius: 41,
-  },
-  avatarFallback: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 41,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarFallbackText: {
-    fontSize: 32,
-    fontFamily: FONTS.bold,
+    borderRadius: 44,
   },
   cameraBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: '#FFFFFF',
   },
-  userTextBlock: {
-    width: '100%',
-  },
-  nameRow: {
+  editProfileBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 2,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: 1,
+    marginBottom: 6,
+  },
+  editProfileText: {
+    fontFamily: FONTS.semibold,
+    fontSize: 13,
+  },
+  detailsWrap: {
+    marginTop: 4,
   },
   userName: {
-    fontSize: 22,
     fontFamily: FONTS.bold,
+    fontSize: 22,
     letterSpacing: -0.4,
   },
   userHeadline: {
-    fontSize: 14,
     fontFamily: FONTS.medium,
-    marginBottom: 4,
+    fontSize: 14,
+    marginTop: 2,
   },
   userEmail: {
-    fontSize: 12.5,
     fontFamily: FONTS.regular,
-    marginBottom: SPACING.sm,
+    fontSize: 13,
+    marginTop: 2,
   },
-  badgeRow: {
+  pillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-  },
-  creditCtaCard: {
-    marginHorizontal: SPACING.lg,
-    borderRadius: BORDER_RADIUS.xl,
-    padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-  },
-  creditTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  creditBadgeWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  creditBadgeText: {
-    color: '#FF6600',
-    fontSize: 10.5,
-    fontFamily: FONTS.bold,
-    letterSpacing: 0.6,
-  },
-  refillPillBtn: {
-    backgroundColor: '#FF6600',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: BORDER_RADIUS.full,
-  },
-  refillBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: FONTS.bold,
-  },
-  creditValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
     gap: 8,
-    marginBottom: 6,
+    marginTop: SPACING.sm,
   },
-  creditValue: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontFamily: FONTS.bold,
-    letterSpacing: -1,
-  },
-  creditLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 13,
-    fontFamily: FONTS.medium,
-  },
-  creditSub: {
-    color: 'rgba(255,255,255,0.65)',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  sectionBlock: {
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.xl,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontFamily: FONTS.bold,
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    fontFamily: FONTS.regular,
-  },
-  addCvBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: BORDER_RADIUS.full,
-  },
-  addCvBtnText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontFamily: FONTS.bold,
-  },
-  cvCardsList: {
-    gap: 10,
-  },
-  cvCard: {
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  cvHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cvIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: BORDER_RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  cvName: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  cvMeta: {
-    fontSize: 11,
-    fontFamily: FONTS.regular,
-  },
-  setPrimaryBtn: {
+  pill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: BORDER_RADIUS.full,
   },
-  setPrimaryText: {
-    fontSize: 11,
-    fontFamily: FONTS.semibold,
+  pillText: {
+    fontFamily: FONTS.medium,
+    fontSize: 12,
   },
-  cvTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.04)',
+  sectionWrap: {
+    paddingHorizontal: SPACING.md,
+    marginTop: SPACING.lg,
   },
-  cvTagChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
+  completenessCard: {
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.xl,
     borderWidth: 1,
   },
-  cvTagText: {
-    fontSize: 11,
-    fontFamily: FONTS.regular,
-  },
-  deleteCvBtn: {
-    marginLeft: 'auto',
-    padding: 4,
-  },
-  linksCard: {
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  linkRow: {
+  completenessHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  linkTitle: {
-    fontSize: 13.5,
-    fontFamily: FONTS.semibold,
-  },
-  linkValue: {
-    fontSize: 11.5,
-    fontFamily: FONTS.regular,
-    marginTop: 1,
-  },
-  linkDivider: {
-    height: 1,
-    marginVertical: 8,
-  },
-  autonomyList: {
-    gap: 8,
-    marginTop: SPACING.sm,
-  },
-  autonomyOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1.2,
-    gap: 12,
-  },
-  autonomyTitle: {
+  completenessTitle: {
+    fontFamily: FONTS.bold,
     fontSize: 14.5,
-    marginBottom: 2,
   },
-  autonomyDesc: {
+  completenessPercent: {
+    fontFamily: FONTS.bold,
+    fontSize: 15,
+  },
+  progressBarBg: {
+    height: 7,
+    borderRadius: BORDER_RADIUS.full,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: BORDER_RADIUS.full,
+  },
+  completenessSub: {
+    fontFamily: FONTS.regular,
     fontSize: 12,
-    lineHeight: 16,
+    marginTop: 8,
+    lineHeight: 17,
+  },
+  sectionHeading: {
+    fontFamily: FONTS.bold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  menuCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    gap: 12,
+  },
+  menuIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTextWrap: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontFamily: FONTS.semibold,
+    fontSize: 15,
+  },
+  menuSubtitle: {
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  itemDivider: {
+    height: 1,
+    marginHorizontal: SPACING.md,
   },
   themeSelectorRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: SPACING.sm,
+    gap: 8,
   },
   themeBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
+    gap: 6,
   },
   themeBtnText: {
     fontSize: 13,
   },
-  sheetSectionHeading: {
-    fontSize: 14,
-    fontFamily: FONTS.bold,
-    marginBottom: 10,
-  },
-  galleryRow: {
-    gap: 12,
-    paddingBottom: 6,
-  },
-  galleryItem: {
+  signOutWrap: {
+    paddingHorizontal: SPACING.md,
+    marginTop: SPACING.xl,
     alignItems: 'center',
-    borderRadius: BORDER_RADIUS.lg,
-    padding: 4,
   },
-  galleryImg: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginBottom: 4,
-  },
-  galleryLabel: {
-    fontSize: 11,
-    fontFamily: FONTS.medium,
-  },
-  coverRow: {
+  signOutBtn: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  coverOption: {
-    flex: 1,
-    minWidth: '45%',
-    height: 48,
-    borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  coverOptionText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontFamily: FONTS.bold,
-  },
-  inputLabel: {
-    fontSize: 12.5,
-    fontFamily: FONTS.semibold,
-    marginBottom: 6,
-  },
-  textInput: {
-    height: 46,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 13.5,
-  },
-  sheetActionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: SPACING.lg,
-  },
-  topUpPacksRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingVertical: SPACING.sm,
-  },
-  topUpPackCard: {
-    flex: 1,
-    padding: SPACING.md,
+    gap: 8,
+    width: '100%',
+    height: 48,
     borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1.2,
-    alignItems: 'center',
-    position: 'relative',
+    borderWidth: 1,
   },
-  bonusBadge: {
-    position: 'absolute',
-    top: -8,
-    backgroundColor: '#FF6600',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: BORDER_RADIUS.full,
+  signOutText: {
+    color: '#EF4444',
+    fontFamily: FONTS.semibold,
+    fontSize: 14.5,
   },
-  bonusBadgeText: {
-    color: '#FFF',
-    fontSize: 9,
-    fontFamily: FONTS.bold,
-  },
-  packAmount: {
-    fontSize: 18,
-    fontFamily: FONTS.bold,
-    marginTop: 4,
-  },
-  packLabel: {
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  packPrice: {
-    fontSize: 14,
-    fontFamily: FONTS.bold,
+  versionText: {
+    fontFamily: FONTS.regular,
+    fontSize: 11.5,
+    marginTop: 12,
   },
 });

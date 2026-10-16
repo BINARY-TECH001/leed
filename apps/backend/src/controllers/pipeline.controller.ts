@@ -1,15 +1,21 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { PipelineService } from '../services/pipeline.service.js';
 import {
   updatePipelineStageSchema,
   scheduleFollowUpSchema,
   updateNotesSchema,
 } from '../utils/validation.js';
-import type { ApiResponse } from '../types/index.js';
+import type { AuthenticatedRequest, ApiResponse } from '../types/index.js';
 
-export const getPipeline = async (req: Request, res: Response): Promise<void> => {
+export const getPipeline = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { records, stats } = await PipelineService.getPipeline();
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const { records, stats } = await PipelineService.getPipeline(userId);
     res.json({
       success: true,
       data: records,
@@ -22,10 +28,16 @@ export const getPipeline = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const updatePipelineStage = async (req: Request, res: Response): Promise<void> => {
+export const updatePipelineStage = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
     const { opportunityId, stage, notes } = updatePipelineStageSchema.parse(req.body);
-    const updated = await PipelineService.updateStage(opportunityId, stage, notes);
+    const updated = await PipelineService.updateStage(userId, opportunityId, stage, notes);
 
     res.json({
       success: true,
@@ -37,10 +49,16 @@ export const updatePipelineStage = async (req: Request, res: Response): Promise<
   }
 };
 
-export const scheduleFollowUp = async (req: Request, res: Response): Promise<void> => {
+export const scheduleFollowUp = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
     const { opportunityId, date, objective } = scheduleFollowUpSchema.parse(req.body);
-    const updated = await PipelineService.scheduleFollowUp(opportunityId, date, objective);
+    const updated = await PipelineService.scheduleFollowUp(userId, opportunityId, date, objective);
 
     res.json({
       success: true,
@@ -52,10 +70,16 @@ export const scheduleFollowUp = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const updateNotes = async (req: Request, res: Response): Promise<void> => {
+export const updateNotes = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
     const { opportunityId, notes } = updateNotesSchema.parse(req.body);
-    const updated = await PipelineService.updateNotes(opportunityId, notes);
+    const updated = await PipelineService.updateNotes(userId, opportunityId, notes);
 
     res.json({
       success: true,
@@ -67,10 +91,16 @@ export const updateNotes = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const deleteFromPipeline = async (req: Request, res: Response): Promise<void> => {
+export const deleteFromPipeline = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
     const { id } = req.params;
-    const removed = await PipelineService.remove(id);
+    const removed = await PipelineService.remove(userId, id);
 
     res.json({
       success: true,

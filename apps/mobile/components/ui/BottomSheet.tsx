@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   backdrop: {
-    ...StyleSheet.absoluteFill as any,
+    ...StyleSheet.absoluteFill,
   },
   keyboardAvoid: {
     width: '100%',

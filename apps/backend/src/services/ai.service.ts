@@ -1,4 +1,13 @@
 import type { Opportunity } from '@prospect/types';
+import { QueryPlannerService } from './queryPlanner.service.js';
+
+export interface ProfileMatchResult {
+  matchScore: number; // 0 to 100
+  matchedSkills: string[];
+  missingSkills: string[];
+  alignmentSummary: string;
+  recommendations: string[];
+}
 
 export class AIService {
   /**
@@ -11,53 +20,77 @@ export class AIService {
     minRateInferred?: number;
     intentBadges: string[];
   } {
-    const lower = prompt.toLowerCase();
-    const badges: string[] = [];
-    const keywords: string[] = [];
-
-    let isRemoteInferred = false;
-    if (lower.includes('remote') || lower.includes('anywhere') || lower.includes('wfh')) {
-      isRemoteInferred = true;
-      badges.push('⚡ Remote Work Verified');
-    }
-
-    let minRateInferred: number | undefined;
-    const rateMatch = lower.match(/\$?(\d+)\s*(\/hr|\/hour|k|\+)/);
-    if (rateMatch) {
-      const num = parseInt(rateMatch[1], 10);
-      minRateInferred = num;
-      badges.push(`💰 Rate Floor ≥ $${num}/hr`);
-    }
-
-    let suggestedCategory: string | undefined;
-    if (lower.includes('contract')) suggestedCategory = 'contract';
-    else if (lower.includes('grant')) suggestedCategory = 'grant';
-    else if (lower.includes('lead')) suggestedCategory = 'lead';
-    else if (lower.includes('freelance')) suggestedCategory = 'freelance';
-    else if (lower.includes('scholarship')) suggestedCategory = 'scholarship';
-    else if (lower.includes('job') || lower.includes('full-time') || lower.includes('staff')) suggestedCategory = 'job';
-
-    if (suggestedCategory) {
-      badges.push(`🎯 Type: ${suggestedCategory.toUpperCase()}`);
-    }
-
-    // Extract core skills
-    ['react native', 'expo', 'typescript', 'rust', 'crdt', 'offline', 'ai', 'ledger', 'node'].forEach((skill) => {
-      if (lower.includes(skill)) {
-        keywords.push(skill);
-      }
-    });
-
-    if (badges.length === 0) {
-      badges.push('🎯 Primary CV Calibrated', '⚡ Global Opportunities');
-    }
+    const plan = QueryPlannerService.planDeterministic(prompt);
 
     return {
-      extractedKeywords: keywords,
-      suggestedCategory,
-      isRemoteInferred,
-      minRateInferred,
-      intentBadges: badges,
+      extractedKeywords: plan.keywords,
+      suggestedCategory: plan.category,
+      isRemoteInferred: plan.isRemote ?? false,
+      minRateInferred: plan.minCompensation,
+      intentBadges: plan.intentBadges,
+    };
+  }
+
+  /**
+   * Deeply analyzes candidate profile skills against an opportunity's description,
+   * requirements, and tags, returning a deterministic match score and skill breakdown.
+   */
+  static calculateMatch(params: {
+    candidateSkills: string[];
+    targetOpportunity: Opportunity;
+  }): ProfileMatchResult {
+    const { candidateSkills, targetOpportunity: opp } = params;
+    const oppText = `${opp.title} ${opp.description} ${opp.summary} ${(opp.tags || []).join(' ')} ${(opp.requirements || []).map((r) => r.text).join(' ')}`.toLowerCase();
+
+    const matchedSkills: string[] = [];
+    const missingSkills: string[] = [];
+
+    // Check candidate skills against opportunity text
+    for (const skill of candidateSkills) {
+      const cleanSkill = skill.trim().toLowerCase();
+      if (!cleanSkill) continue;
+      if (oppText.includes(cleanSkill)) {
+        matchedSkills.push(skill);
+      }
+    }
+
+    // Identify requirements mentioned in opportunity that candidate doesn't list
+    const candidateSkillsLower = candidateSkills.map((s) => s.toLowerCase());
+    for (const req of opp.requirements || []) {
+      const reqTextLower = req.text.toLowerCase();
+      const hasSkill = candidateSkillsLower.some((cs) => reqTextLower.includes(cs));
+      if (!hasSkill && !req.isMatched) {
+        missingSkills.push(req.text);
+      }
+    }
+
+    // Deterministic match score calculation
+    let matchScore = 50;
+    if (candidateSkills.length > 0) {
+      const matchRatio = matchedSkills.length / Math.max(candidateSkills.length, 1);
+      matchScore = Math.min(100, Math.round(40 + matchRatio * 50));
+    }
+
+    if (opp.isRemote) {
+      matchScore = Math.min(100, matchScore + 5);
+    }
+
+    const alignmentSummary =
+      matchedSkills.length >= 2
+        ? `Strong technical alignment on ${matchedSkills.slice(0, 3).join(', ')}. Candidate profile fulfills primary domain requirements for ${opp.title}.`
+        : `Moderate alignment. Opportunity emphasizes specialized criteria that may require tailored portfolio highlights.`;
+
+    const recommendations = [
+      `Emphasize verified production outcomes in ${matchedSkills[0] || 'core stack'} in your opening statement.`,
+      `Reference ${opp.organization}'s specific operational focus in your application.`,
+    ];
+
+    return {
+      matchScore,
+      matchedSkills,
+      missingSkills: missingSkills.slice(0, 3),
+      alignmentSummary,
+      recommendations,
     };
   }
 
@@ -124,5 +157,78 @@ export class AIService {
     }
 
     return { subject, body };
+  }
+
+  /**
+   * Generates a tailored pitch proposal asynchronously, attempting Gemini AI generation
+   * if GEMINI_API_KEY is configured, otherwise falling back smoothly to deterministic templates.
+   */
+  static async generatePitchAsync(params: {
+    opportunity: Opportunity;
+    tone: 'Executive' | 'Direct' | 'Technical' | 'Warm';
+    channel: 'email' | 'linkedin' | 'followup';
+    cvSkills: string[];
+    userName: string;
+  }): Promise<{ subject: string; body: string; generatedBy: 'gemini' | 'template' }> {
+    const templateResult = this.generatePitch(params);
+
+    if (!process.env.GEMINI_API_KEY) {
+      return { ...templateResult, generatedBy: 'template' };
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = process.env.AI_MODEL || 'gemini-2.0-flash';
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      const prompt = `You are an elite talent representative and executive career strategist.
+Generate a tailored ${params.channel} outreach message in a ${params.tone} tone.
+Candidate Name: ${params.userName}
+Candidate Key Skills: ${params.cvSkills.join(', ')}
+Target Opportunity Title: ${params.opportunity.title}
+Target Organization: ${params.opportunity.organization}
+Location: ${params.opportunity.location}
+Compensation: ${params.opportunity.compensation}
+Details: ${params.opportunity.description}
+
+Output strict JSON with:
+{
+  "subject": "Email/Message Subject Line",
+  "body": "Complete message text ready to send"
+}`;
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (!res.ok) {
+        return { ...templateResult, generatedBy: 'template' };
+      }
+
+      const json = (await res.json()) as any;
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) {
+        return { ...templateResult, generatedBy: 'template' };
+      }
+
+      const parsed = JSON.parse(text);
+      if (parsed.subject && parsed.body) {
+        return {
+          subject: parsed.subject,
+          body: parsed.body,
+          generatedBy: 'gemini',
+        };
+      }
+
+      return { ...templateResult, generatedBy: 'template' };
+    } catch {
+      return { ...templateResult, generatedBy: 'template' };
+    }
   }
 }

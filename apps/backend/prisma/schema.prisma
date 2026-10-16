@@ -55,48 +55,81 @@ enum FollowUpStatus {
 }
 
 model User {
-  id                  String               @id @default(uuid())
-  email               String               @unique
-  passwordHash        String?
-  name                String
-  avatarUrl           String?
-  role                String               @default("USER")
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  profile             Profile?
-  goals               Goal[]
-  documents           Document[]
-  opportunities       Opportunity[]
-  radars              OpportunityRadar[]
-  followUps           FollowUp[]
-  attentionItems      AttentionItem[]
-  notifications       Notification[]
-  activities          Activity[]
-  connections         Connection[]
-  creditAccount       CreditAccount?
-  searches            SearchSession[]
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String?
+  name                  String
+  preferredDisplayName  String?
+  avatarUrl             String?
+  phone                 String?
+  phoneVerified         Boolean                @default(false)
+  emailVerified         Boolean                @default(false)
+  country               String?
+  city                  String?
+  timezone              String                 @default("UTC")
+  preferredLanguage     String                 @default("en")
+  status                String                 @default("active")
+  role                  String                 @default("USER")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  profile               Profile?
+  goals                 Goal[]
+  documents             Document[]
+  opportunities         Opportunity[]
+  radars                OpportunityRadar[]
+  followUps             FollowUp[]
+  attentionItems        AttentionItem[]
+  notifications         Notification[]
+  activities            Activity[]
+  connections           Connection[]
+  creditAccount         CreditAccount?
+  searches              SearchSession[]
+  userOpportunities     UserOpportunity[]
+  whatsAppAccount       WhatsAppAccount?
+  whatsAppConversations WhatsAppConversation[]
+  actionRecords         ActionExecutionRecord[]
+  telegramAccount       TelegramAccount?
+  emailPreference       EmailNotificationPreference?
+  pushDeviceTokens      PushDeviceToken[]
+  notificationPreference NotificationPreference?
+  channelDeliveryRecords ChannelDeliveryRecord[]
 
   @@map("users")
 }
 
 model Profile {
-  id                  String               @id @default(uuid())
-  userId              String               @unique
-  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bio                 String?
-  targetOutcome       String
-  targetCategories    OpportunityType[]
-  targetRoles         String[]
-  targetIndustries    String[]
-  targetLocations     String[]
-  remotePreference    String               @default("remote_only")
-  minCompensation     String?
-  yearsOfExperience   Int                  @default(0)
-  autonomyLevel       AutonomyLevel        @default(APPROVE)
-  onboardingCompleted Boolean              @default(false)
-  skills              Skill[]
-  experiences         Experience[]
-  learnedPreferences  Json?
+  id                         String            @id @default(uuid())
+  userId                     String            @unique
+  user                       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline                   String?
+  currentRole                String?
+  careerGoals                String?
+  bio                        String?
+  targetOutcome              String
+  targetCategories           OpportunityType[]
+  targetRoles                String[]
+  targetIndustries           String[]
+  targetLocations            String[]
+  remotePreference           String            @default("remote_only")
+  minCompensation            String?
+  salaryCurrency             String            @default("USD")
+  targetFundingAmount        String?
+  studyLevel                 String?
+  yearsOfExperience          Int               @default(0)
+  autonomyLevel              AutonomyLevel     @default(APPROVE)
+  minMatchScore              Int               @default(60)
+  excludedKeywords           String[]          @default([])
+  excludedOrganizations      String[]          @default([])
+  aiPersonalizationEnabled   Boolean           @default(true)
+  dataRetentionMonths        Int               @default(12)
+  onboardingStep             Int               @default(1)
+  onboardingCompleted        Boolean           @default(false)
+  scholarshipPreferences     Json?
+  grantPreferences           Json?
+  businessProspectPreferences Json?
+  skills                     Skill[]
+  experiences                Experience[]
+  learnedPreferences         Json?
 
   @@map("profiles")
 }
@@ -160,8 +193,8 @@ model Document {
 
 model Opportunity {
   id                 String             @id @default(uuid())
-  userId             String
-  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   type               OpportunityType
   title              String
   organization       String
@@ -178,6 +211,7 @@ model Opportunity {
   source             String
   sourceType         String
   originalUrl        String
+  canonicalUrl       String?
   description        String
   summary            String
   requirements       Json
@@ -191,11 +225,83 @@ model Opportunity {
   tags               String[]
   discoveredAt       DateTime           @default(now())
   lastInteractedAt   DateTime?
+  lastVerifiedAt     DateTime?
+  expiresAt          DateTime?
+  isVerified         Boolean            @default(true)
+  contentFingerprint String?
   timeline           TimelineEvent[]
   notes              String?
   metadata           Json?
+  userOpportunities  UserOpportunity[]
+  sourceObservations SourceObservation[]
+  whatsAppConversations WhatsAppConversation[]
+  actionRecords       ActionExecutionRecord[]
 
+  @@index([originalUrl])
+  @@index([type, isRemote])
   @@map("opportunities")
+}
+
+model UserOpportunity {
+  id                 String             @id @default(uuid())
+  userId             String
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId      String
+  opportunity        Opportunity        @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  stage              OpportunityStatus  @default(SAVED)
+  appliedAt          DateTime?
+  followUpDate       DateTime?
+  followUpObjective  String?
+  notes              String?
+  customPitch        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@unique([userId, opportunityId])
+  @@index([userId, stage])
+  @@map("user_opportunities")
+}
+
+model SourceObservation {
+  id                 String       @id @default(uuid())
+  opportunityId      String
+  opportunity        Opportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceId           String
+  sourceName         String
+  sourceType         String
+  externalRecordId   String?
+  originalUrl        String
+  canonicalUrl       String?
+  firstSeenAt        DateTime     @default(now())
+  lastSeenAt         DateTime     @default(now())
+  lastVerifiedAt     DateTime?
+  httpStatus         Int?
+  contentFingerprint String?
+  rawPayload         Json?
+  retentionPolicy    String       @default("standard")
+  verificationStatus String       @default("verified")
+  metadata           Json?
+
+  @@index([sourceId, externalRecordId])
+  @@index([originalUrl])
+  @@map("source_observations")
+}
+
+model IngestionRun {
+  id                     String    @id @default(uuid())
+  sourceId               String
+  radarId                String?
+  startedAt              DateTime  @default(now())
+  completedAt            DateTime?
+  status                 String    @default("running")
+  recordsFetched         Int       @default(0)
+  newObservationsCount   Int       @default(0)
+  newOpportunitiesCount  Int       @default(0)
+  duplicatesCount        Int       @default(0)
+  errors                 Json?
+  metadata               Json?
+
+  @@map("ingestion_runs")
 }
 
 model OpportunityRadar {
@@ -284,15 +390,20 @@ model AttentionItem {
 }
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  body      String
-  type      String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id            String            @id @default(uuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  body          String
+  type          String
+  priority      AttentionPriority @default(RECOMMENDED)
+  isRead        Boolean           @default(false)
+  opportunityId String?
+  actionUrl     String?
+  metadata      Json?
+  createdAt     DateTime          @default(now())
 
+  @@index([userId, isRead])
   @@map("notifications")
 }
 
@@ -375,4 +486,187 @@ model TimelineEvent {
   meta          Json?
 
   @@map("timeline_events")
+}
+
+model WhatsAppAccount {
+  id                      String            @id @default(uuid())
+  userId                  String            @unique
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phoneNumber             String            @unique
+  isVerified              Boolean           @default(false)
+  verificationCode        String?
+  verificationExpiresAt   DateTime?
+  consentGiven            Boolean           @default(false)
+  consentGivenAt          DateTime?
+  status                  String            @default("pending_verification") // active, paused, disconnected
+  quietHoursStart         String?           @default("22:00")
+  quietHoursEnd           String?           @default("08:00")
+  maxDailyNotifications   Int               @default(5)
+  notificationsSentToday  Int               @default(0)
+  lastNotificationSentAt  DateTime?
+  preferredCategories     OpportunityType[]
+  minMatchScore           Int               @default(60)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@map("whatsapp_accounts")
+}
+
+model WhatsAppConversation {
+  id                   String                  @id @default(uuid())
+  userId               String
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  waId                 String                  // WhatsApp contact identifier (E.164 without plus or as provided)
+  activeOpportunityId  String?
+  activeOpportunity    Opportunity?            @relation(fields: [activeOpportunityId], references: [id], onDelete: SetNull)
+  lastInteractionAt    DateTime                @default(now())
+  pendingAction        Json?                   // Context for multi-step clarification/confirmation
+  messages             WhatsAppMessage[]
+  actionRecords        ActionExecutionRecord[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@index([waId])
+  @@index([userId])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsAppMessage {
+  id                   String               @id @default(uuid())
+  conversationId       String
+  conversation         WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction            String               // "inbound" | "outbound"
+  waMessageId          String?              @unique // Meta WAMID for deduplication
+  messageType          String               @default("text") // text, interactive_button, interactive_list, template
+  content              String
+  rawPayload           Json?
+  deliveryStatus       String               @default("sent") // sent, delivered, read, failed
+  errorMessage         String?
+  createdAt            DateTime             @default(now())
+
+  @@index([conversationId])
+  @@index([waMessageId])
+  @@map("whatsapp_messages")
+}
+
+model ActionExecutionRecord {
+  id                   String                @id @default(uuid())
+  userId               String
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId       String?
+  conversation         WhatsAppConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  opportunityId        String?
+  opportunity          Opportunity?          @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  actionType           String                // PREPARE_APPLICATION, SUBMIT_APPLICATION, SAVE_OPPORTUNITY, UPDATE_PREFERENCES
+  level                String                @default("prepare") // prepare, assist, submit
+  status               String                @default("proposed") // proposed, clarification_needed, authorized, executing, completed, failed
+  evidence             Json?                 // Resulting pitch, link, confirmation receipt, error details
+  authorizedAt         DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime              @default(now())
+
+  @@index([userId])
+  @@index([opportunityId])
+  @@map("action_execution_records")
+}
+
+model TelegramAccount {
+  id                     String    @id @default(uuid())
+  userId                 String    @unique
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  telegramChatId         String?   @unique
+  telegramUsername       String?
+  linkingToken           String?   @unique
+  linkingTokenExpiresAt  DateTime?
+  isVerified             Boolean   @default(false)
+  consentGiven           Boolean   @default(false)
+  consentGivenAt         DateTime?
+  status                 String    @default("pending_verification") // active, paused, disconnected
+  quietHoursStart        String?   @default("22:00")
+  quietHoursEnd          String?   @default("08:00")
+  maxDailyNotifications  Int       @default(10)
+  notificationsSentToday Int       @default(0)
+  lastNotificationSentAt DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@map("telegram_accounts")
+}
+
+model EmailNotificationPreference {
+  id                    String            @id @default(uuid())
+  userId                String            @unique
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email                 String
+  isVerified            Boolean           @default(false)
+  verificationCode      String?
+  verificationExpiresAt DateTime?
+  consentGiven          Boolean           @default(true)
+  consentGivenAt        DateTime?
+  frequency             String            @default("immediate") // immediate, daily_digest, weekly_digest, disabled
+  quietHoursStart       String?           @default("22:00")
+  quietHoursEnd         String?           @default("08:00")
+  opportunityCategories OpportunityType[]
+  status                String            @default("active") // active, paused, unsubscribed
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@map("email_notification_preferences")
+}
+
+model PushDeviceToken {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique // Expo push token or Web push endpoint JSON
+  platform   String   // "expo", "ios", "android", "web"
+  deviceName String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, isActive])
+  @@map("push_device_tokens")
+}
+
+model NotificationPreference {
+  id                            String   @id @default(uuid())
+  userId                        String   @unique
+  user                          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newMatchEnabled               Boolean  @default(true)
+  highPriorityOnly              Boolean  @default(false)
+  deadlineRemindersEnabled      Boolean  @default(true)
+  applicationUpdatesEnabled     Boolean  @default(true)
+  missingInfoAlertsEnabled      Boolean  @default(true)
+  statusChangeAlertsEnabled     Boolean  @default(true)
+  digestFrequency               String   @default("none") // none, daily, weekly
+  marketingAnnouncementsEnabled Boolean  @default(false)
+  defaultChannel                String   @default("in_app") // in_app, telegram, email, whatsapp, push
+  quietHoursStart               String   @default("22:00")
+  quietHoursEnd                 String   @default("08:00")
+  timezone                      String   @default("UTC")
+  maxAlertsPerDay               Int      @default(10)
+  duplicateSuppressionHours     Int      @default(72)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+model ChannelDeliveryRecord {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel           String   // "whatsapp", "telegram", "email", "push", "in_app"
+  eventType         String   // "OPPORTUNITY_MATCHED", etc.
+  recipient         String
+  status            String   // "queued", "sent", "delivered", "failed", "skipped_budget", "skipped_quiet_hours"
+  providerMessageId String?
+  costEstimateUsd   Float    @default(0.0)
+  error             String?
+  createdAt         DateTime @default(now())
+
+  @@index([userId, channel])
+  @@index([eventType])
+  @@map("channel_delivery_records")
 }

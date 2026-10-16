@@ -11,13 +11,29 @@ export interface OpportunitySearchParams {
   sort?: 'match' | 'comp' | 'newest' | 'org';
 }
 
+export interface OpportunitySearchResult {
+  results: Opportunity[];
+  intentBadges: string[];
+  extractedKeywords: string[];
+  total: number;
+}
+
 export const opportunityService = {
-  async getOpportunities(params?: OpportunitySearchParams): Promise<Opportunity[]> {
+  async getOpportunities(
+    params?: OpportunitySearchParams
+  ): Promise<Opportunity[]> {
     try {
-      const response = await api.get<{ success: boolean; data: Opportunity[] }>('/opportunities', {
-        params,
-      });
-      if (response.data?.success && Array.isArray(response.data.data) && response.data.data.length > 0) {
+      const response = await api.get<{ success: boolean; data: Opportunity[] }>(
+        '/opportunities',
+        {
+          params,
+        }
+      );
+      if (
+        response.data?.success &&
+        Array.isArray(response.data.data) &&
+        response.data.data.length > 0
+      ) {
         return response.data.data;
       }
     } catch {
@@ -50,7 +66,9 @@ export const opportunityService = {
     }
 
     if (params?.sort === 'comp') {
-      list.sort((a, b) => (b.compensationAmount || 0) - (a.compensationAmount || 0));
+      list.sort(
+        (a, b) => (b.compensationAmount || 0) - (a.compensationAmount || 0)
+      );
     } else if (params?.sort === 'newest') {
       list.reverse();
     } else if (params?.sort === 'org') {
@@ -62,9 +80,72 @@ export const opportunityService = {
     return list;
   },
 
+  async searchOpportunities(
+    prompt: string,
+    options?: { enableAI?: boolean; sort?: 'match' | 'comp' | 'newest' | 'org' }
+  ): Promise<OpportunitySearchResult> {
+    try {
+      const response = await api.post<{
+        success: boolean;
+        data: {
+          prompt: string;
+          plan?: any;
+          intentBadges: string[];
+          extractedKeywords: string[];
+          results: Opportunity[];
+        };
+        meta?: {
+          total: number;
+        };
+      }>('/opportunities/search', {
+        prompt,
+        enableAI: options?.enableAI,
+        sort: options?.sort,
+      });
+
+      if (response.data?.success && response.data.data) {
+        return {
+          results: response.data.data.results || [],
+          intentBadges: response.data.data.intentBadges || [],
+          extractedKeywords: response.data.data.extractedKeywords || [],
+          total: response.data.meta?.total ?? response.data.data.results.length,
+        };
+      }
+    } catch {
+      // Graceful offline fallback
+    }
+
+    // Local deterministic fallback
+    const lower = prompt.toLowerCase();
+    const badges: string[] = [];
+    if (lower.includes('remote')) badges.push('⚡ Remote Work Verified');
+    if (lower.includes('contract')) badges.push('🎯 Type: CONTRACT');
+    else if (lower.includes('job')) badges.push('🎯 Type: JOB');
+    else if (lower.includes('grant')) badges.push('🎯 Type: GRANT');
+
+    const filtered = SAMPLE_OPPORTUNITIES.filter((opp) => {
+      return (
+        opp.title.toLowerCase().includes(lower) ||
+        opp.organization.toLowerCase().includes(lower) ||
+        opp.description.toLowerCase().includes(lower) ||
+        opp.tags.some((t) => t.toLowerCase().includes(lower))
+      );
+    });
+
+    const results = filtered.length > 0 ? filtered : SAMPLE_OPPORTUNITIES;
+    return {
+      results,
+      intentBadges: badges.length > 0 ? badges : ['🎯 Primary CV Calibrated'],
+      extractedKeywords: [prompt],
+      total: results.length,
+    };
+  },
+
   async getOpportunityById(id: string): Promise<Opportunity> {
     try {
-      const response = await api.get<{ success: boolean; data: Opportunity }>(`/opportunities/${id}`);
+      const response = await api.get<{ success: boolean; data: Opportunity }>(
+        `/opportunities/${id}`
+      );
       if (response.data?.success && response.data.data) {
         return response.data.data;
       }
@@ -84,13 +165,19 @@ export const opportunityService = {
     payload: { cvName?: string; customPitch?: string }
   ): Promise<{ success: boolean; message: string; timestamp: string }> {
     try {
-      const response = await api.post<{ success: boolean; message: string; timestamp: string }>(
-        `/opportunities/${opportunityId}/apply`,
-        payload
-      );
-      return response.data;
+      const response = await api.post<{
+        success: boolean;
+        message: string;
+        data?: { timestamp: string };
+      }>(`/opportunities/${opportunityId}/apply`, payload);
+
+      return {
+        success: true,
+        message: response.data?.message || 'Application dispatched successfully',
+        timestamp: response.data?.data?.timestamp || new Date().toISOString(),
+      };
     } catch {
-      // Simulate local optimistic success
+      // Optimistic offline fallback
       return {
         success: true,
         message: 'Application dispatched successfully to verified endpoint.',

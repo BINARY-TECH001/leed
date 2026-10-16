@@ -18,6 +18,10 @@ export const opportunitySearchSchema = z.object({
   remoteOnly: z.preprocess((v) => v === 'true' || v === true, z.boolean()).optional(),
   minCompRate: z.preprocess((v) => (v ? Number(v) : undefined), z.number()).optional(),
   highFitOnly: z.preprocess((v) => v === 'true' || v === true, z.boolean()).optional(),
+  location: z.string().optional(),
+  tags: z.preprocess((v) => (typeof v === 'string' ? v.split(',') : v), z.array(z.string()).optional()),
+  page: z.preprocess((v) => (v ? Number(v) : undefined), z.number().int().positive().optional()),
+  limit: z.preprocess((v) => (v ? Number(v) : undefined), z.number().int().positive().optional()),
   sort: z.enum(['match', 'comp', 'newest', 'org']).optional(),
 });
 

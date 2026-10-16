@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
-import { Card, Badge, Button } from '@/components/ui';
+import { Card, Badge } from '@/components/ui';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
-import { Radar2, Play, Timer1, ArrowRight2, Setting2 } from 'iconsax-react-native';
+import {
+  Radar2,
+  Play,
+  Timer1,
+  ArrowRight2,
+  Setting2,
+  Flash,
+  Clock,
+  Briefcase,
+} from 'iconsax-react-native';
 import * as Haptics from 'expo-haptics';
 import type { OpportunityRadar } from '@prospect/types';
 
@@ -11,11 +20,30 @@ export interface RadarCardProps {
   radar: OpportunityRadar;
   onPress?: () => void;
   onRunScan?: (id: string) => Promise<void>;
+  onToggleStatus?: (id: string) => void;
 }
 
-export const RadarCard: React.FC<RadarCardProps> = ({ radar, onPress, onRunScan }) => {
+const CATEGORY_COLORS: Record<string, { color: string; bg: string }> = {
+  contract: { color: '#FF6600', bg: 'rgba(255, 102, 0, 0.1)' },
+  'full-time': { color: '#0052FF', bg: 'rgba(0, 82, 255, 0.1)' },
+  lead: { color: '#10B981', bg: 'rgba(16, 185, 129, 0.1)' },
+  grant: { color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.1)' },
+};
+
+export const RadarCard: React.FC<RadarCardProps> = ({
+  radar,
+  onPress,
+  onRunScan,
+  onToggleStatus,
+}) => {
   const { colors, isDark } = useTheme();
   const [isRunning, setIsRunning] = useState(false);
+
+  const isActive = radar.status === 'active';
+  const catTheme = (radar.category && CATEGORY_COLORS[radar.category]) || {
+    color: colors.accent,
+    bg: 'rgba(255, 102, 0, 0.1)',
+  };
 
   const handleRun = async (e?: any) => {
     e?.stopPropagation?.();
@@ -24,7 +52,7 @@ export const RadarCard: React.FC<RadarCardProps> = ({ radar, onPress, onRunScan 
     if (onRunScan) {
       await onRunScan(radar.id);
     } else {
-      await new Promise((res) => setTimeout(res, 1200));
+      await new Promise((res) => setTimeout(res, 1000));
     }
     setIsRunning(false);
   };
@@ -43,49 +71,77 @@ export const RadarCard: React.FC<RadarCardProps> = ({ radar, onPress, onRunScan 
       style={{ marginBottom: SPACING.md }}
     >
       <Card variant="elevated" style={styles.card}>
-        <View style={styles.headerRow}>
+        {/* Top Header Row */}
+        <View style={styles.topRow}>
           <View style={styles.titleArea}>
             <View
               style={[
                 styles.radarIcon,
-                { backgroundColor: radar.status === 'active' ? 'rgba(255, 102, 0, 0.12)' : 'rgba(148, 163, 184, 0.15)' },
+                {
+                  backgroundColor: isActive
+                    ? 'rgba(255, 102, 0, 0.12)'
+                    : 'rgba(148, 163, 184, 0.15)',
+                },
               ]}
             >
               <Radar2
                 size={20}
-                color={radar.status === 'active' ? colors.accent : colors.textMuted}
+                color={isActive ? colors.accent : colors.textMuted}
                 variant="Bold"
               />
             </View>
 
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-                {radar.title}
-              </Text>
+              <View style={styles.nameCategoryRow}>
+                <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                  {radar.title}
+                </Text>
+              </View>
+
               <View style={styles.scheduleRow}>
-                <Timer1 size={12} color={colors.textMuted} variant="Linear" />
-                <Text style={[styles.schedule, { color: colors.textMuted }]}>
-                  {radar.scheduleDescription}
+                <Clock size={11} color={colors.textMuted} variant="Linear" />
+                <Text style={[styles.scheduleText, { color: colors.textMuted }]}>
+                  {radar.scheduleDescription || `Runs ${radar.frequency}`}
                 </Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.headerRightBadges}>
-            <Badge
-              label={radar.status.toUpperCase()}
-              variant={radar.status === 'active' ? 'success' : 'neutral'}
-              size="sm"
-              dot
-            />
-            {onPress && (
-              <View style={styles.chevronWrap}>
-                <ArrowRight2 size={14} color={colors.textMuted} />
+          {/* Category Badge & Status */}
+          <View style={styles.headerRightWrap}>
+            {radar.category && (
+              <View style={[styles.categoryBadge, { backgroundColor: catTheme.bg }]}>
+                <Text style={[styles.categoryBadgeText, { color: catTheme.color }]}>
+                  {radar.category.toUpperCase()}
+                </Text>
               </View>
             )}
+
+            <View
+              style={[
+                styles.statusIndicator,
+                { backgroundColor: isActive ? 'rgba(16, 185, 129, 0.12)' : 'rgba(148, 163, 184, 0.15)' },
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: isActive ? '#10B981' : colors.textMuted },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: isActive ? '#10B981' : colors.textMuted },
+                ]}
+              >
+                {isActive ? 'ACTIVE' : 'PAUSED'}
+              </Text>
+            </View>
           </View>
         </View>
 
+        {/* Search Query Prompt */}
         <Text
           style={[styles.promptText, { color: colors.textSecondary }]}
           numberOfLines={2}
@@ -93,17 +149,18 @@ export const RadarCard: React.FC<RadarCardProps> = ({ radar, onPress, onRunScan 
           "{radar.prompt}"
         </Text>
 
+        {/* Stats & Actions Footer */}
         <View style={[styles.statsRow, { borderTopColor: colors.borderSubtle }]}>
-          <View style={styles.statItem}>
+          <View style={styles.statGroup}>
             <Text style={[styles.statValue, { color: colors.text }]}>
               {radar.totalFound}
             </Text>
             <Text style={[styles.statLabel, { color: colors.textMuted }]}>
-              Qualified Matches
+              Matches Found
             </Text>
           </View>
 
-          <View style={styles.statItem}>
+          <View style={styles.statGroup}>
             <Text style={[styles.statValue, { color: colors.accent }]}>
               +{radar.newSinceLastCheck}
             </Text>
@@ -112,17 +169,28 @@ export const RadarCard: React.FC<RadarCardProps> = ({ radar, onPress, onRunScan 
             </Text>
           </View>
 
-          <View style={styles.actionsRightRow}>
-            <Button
-              title={isRunning ? 'Scanning…' : 'Scan'}
-              size="sm"
-              variant="outline"
-              isLoading={isRunning}
-              leftIcon={!isRunning ? <Play size={12} color={colors.accent} variant="Bold" /> : undefined}
-              onPress={handleRun}
-              style={styles.scanBtn}
-            />
-          </View>
+          {/* Quick Scan Button */}
+          <TouchableOpacity
+            style={[
+              styles.scanBtn,
+              {
+                backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA',
+                borderColor: colors.borderSubtle,
+              },
+            ]}
+            onPress={handleRun}
+            disabled={isRunning}
+            activeOpacity={0.75}
+          >
+            {isRunning ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <>
+                <Play size={12} color={colors.accent} variant="Bold" />
+                <Text style={[styles.scanBtnText, { color: colors.text }]}>Scan Now</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </Card>
     </TouchableOpacity>
@@ -132,9 +200,9 @@ export const RadarCard: React.FC<RadarCardProps> = ({ radar, onPress, onRunScan 
 const styles = StyleSheet.create({
   card: {
     padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.xl,
   },
-  headerRow: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -143,21 +211,25 @@ const styles = StyleSheet.create({
   titleArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 10,
     flex: 1,
-    marginRight: SPACING.xs,
+    marginRight: 8,
   },
   radarIcon: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: BORDER_RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  nameCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FONTS.bold,
-    letterSpacing: -0.2,
   },
   scheduleRow: {
     flexDirection: 'row',
@@ -165,17 +237,41 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 2,
   },
-  schedule: {
-    fontSize: 11.5,
+  scheduleText: {
+    fontSize: 11,
     fontFamily: FONTS.regular,
   },
-  headerRightBadges: {
+  headerRightWrap: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  categoryBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: BORDER_RADIUS.xs,
+  },
+  categoryBadgeText: {
+    fontSize: 9.5,
+    fontFamily: FONTS.bold,
+    letterSpacing: 0.5,
+  },
+  statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.full,
   },
-  chevronWrap: {
-    paddingLeft: 2,
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  statusText: {
+    fontSize: 9.5,
+    fontFamily: FONTS.bold,
+    letterSpacing: 0.5,
   },
   promptText: {
     fontSize: 13,
@@ -188,10 +284,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: SPACING.sm + 2,
+    paddingTop: 10,
     borderTopWidth: 1,
   },
-  statItem: {
+  statGroup: {
     alignItems: 'flex-start',
   },
   statValue: {
@@ -202,12 +298,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: FONTS.regular,
   },
-  actionsRightRow: {
+  scanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
   },
-  scanBtn: {
-    minWidth: 80,
+  scanBtnText: {
+    fontSize: 12,
+    fontFamily: FONTS.semibold,
   },
 });

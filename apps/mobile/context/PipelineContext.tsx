@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useMemo } from 'react';
 import type { Opportunity, OpportunityStatus } from '@prospect/types';
-import { SAMPLE_OPPORTUNITIES } from '@/constants/mockData';
+import { SAMPLE_OPPORTUNITIES, SAMPLE_RADARS } from '@/constants/mockData';
 import * as Haptics from 'expo-haptics';
 
 export type PipelineStage =
@@ -42,6 +42,8 @@ interface PipelineContextType {
     appliedCount: number;
     interviewingCount: number;
     followUpsDueCount: number;
+    activeRadars: number;
+    totalMatches: number;
   };
 }
 
@@ -247,6 +249,8 @@ export const PipelineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       followUpsDueCount: records.filter(
         (r) => r.stage === 'follow_up' || (r.followUpDate && r.followUpDate.includes('Today'))
       ).length,
+      activeRadars: SAMPLE_RADARS.filter((r) => r.status === 'active').length,
+      totalMatches: SAMPLE_OPPORTUNITIES.length,
     };
   }, [records]);
 
