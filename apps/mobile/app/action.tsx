@@ -363,7 +363,7 @@ export default function ActionScreen() {
                     styles.heroInput,
                     { color: colors.text, fontFamily: FONTS.regular },
                   ]}
-                  placeholder="Ask ProspectAI, search 120+ live portals, or describe your target role in plain English…"
+                  placeholder="Ask LeedAI, search 120+ live portals, or describe your target role in plain English…"
                   placeholderTextColor={colors.textMuted}
                   value={query}
                   onChangeText={setQuery}

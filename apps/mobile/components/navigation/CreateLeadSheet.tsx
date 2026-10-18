@@ -253,7 +253,7 @@ export const CreateLeadSheet: React.FC<CreateLeadSheetProps> = ({
                   styles.promptInput,
                   { color: colors.text, fontFamily: FONTS.regular },
                 ]}
-                placeholder="Ask ProspectAI: e.g. Contract roles > $120/hr matching my CV in US/Europe…"
+                placeholder="Ask LeedAI: e.g. Contract roles > $120/hr matching my CV in US/Europe…"
                 placeholderTextColor={colors.textMuted}
                 value={query}
                 onChangeText={setQuery}

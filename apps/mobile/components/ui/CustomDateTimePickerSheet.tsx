@@ -92,7 +92,7 @@ const MONTH_NAMES = [
   "December",
 ];
 
-const WEEK_DAYS = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEK_DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 export const CustomDateTimePickerSheet: React.FC<
   CustomDateTimePickerSheetProps
@@ -134,8 +134,8 @@ export const CustomDateTimePickerSheet: React.FC<
     initialObjective || OBJECTIVES[0],
   );
 
-  // Calendar matrix calculation
-  const calendarDays = useMemo(() => {
+  // Calendar matrix calculation chunked into exact 7-day week rows
+  const calendarWeeks = useMemo(() => {
     const firstDayOfMonth = new Date(viewYear, viewMonth, 1);
     const lastDayOfMonth = new Date(viewYear, viewMonth + 1, 0);
 
@@ -179,7 +179,27 @@ export const CustomDateTimePickerSheet: React.FC<
       });
     }
 
-    return days;
+    // Trailing empty slots to make complete 7-day weeks
+    const remainder = days.length % 7;
+    if (remainder !== 0) {
+      const trailing = 7 - remainder;
+      for (let i = 0; i < trailing; i++) {
+        days.push({
+          dayNumber: null,
+          date: null,
+          isPast: true,
+          isToday: false,
+          isSelected: false,
+        });
+      }
+    }
+
+    // Chunk into exact 7-day rows
+    const weeks: (typeof days)[] = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(days.slice(i, i + 7));
+    }
+    return weeks;
   }, [viewYear, viewMonth, selectedDate, today]);
 
   const handlePrevMonth = () => {
@@ -427,58 +447,65 @@ export const CustomDateTimePickerSheet: React.FC<
             {/* Days of Week Row */}
             <View style={styles.weekDaysRow}>
               {WEEK_DAYS.map((w, idx) => (
-                <Text
-                  key={idx}
-                  style={[styles.weekDayText, { color: colors.textMuted }]}
-                >
-                  {w}
-                </Text>
+                <View key={idx} style={styles.daySlotWrap}>
+                  <Text
+                    style={[styles.weekDayText, { color: colors.textMuted }]}
+                  >
+                    {w}
+                  </Text>
+                </View>
               ))}
             </View>
 
-            {/* Calendar Days Matrix */}
-            <View style={styles.daysGrid}>
-              {calendarDays.map((d, index) => {
-                if (d.dayNumber === null) {
-                  return <View key={index} style={styles.emptyDaySlot} />;
-                }
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    disabled={d.isPast}
-                    onPress={() => handleSelectDay(d)}
-                    style={[
-                      styles.daySlot,
-                      d.isSelected && { backgroundColor: colors.accent },
-                      d.isToday &&
-                        !d.isSelected && {
-                          borderColor: colors.accent,
-                          borderWidth: 1.5,
-                        },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dayNumberText,
-                        {
-                          color: d.isSelected
-                            ? "#FFFFFF"
-                            : d.isPast
-                              ? colors.textMuted
-                              : colors.text,
-                          fontFamily:
-                            d.isSelected || d.isToday
-                              ? FONTS.bold
-                              : FONTS.regular,
-                          opacity: d.isPast ? 0.35 : 1,
-                        },
-                      ]}
-                    >
-                      {d.dayNumber}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            {/* Calendar Days Matrix (7-day rows) */}
+            <View style={styles.weeksContainer}>
+              {calendarWeeks.map((week, weekIdx) => (
+                <View key={weekIdx} style={styles.weekRow}>
+                  {week.map((d, dayIdx) => {
+                    if (d.dayNumber === null) {
+                      return <View key={dayIdx} style={styles.daySlotWrap} />;
+                    }
+                    return (
+                      <View key={dayIdx} style={styles.daySlotWrap}>
+                        <TouchableOpacity
+                          disabled={d.isPast}
+                          onPress={() => handleSelectDay(d)}
+                          style={[
+                            styles.daySlot,
+                            d.isSelected && { backgroundColor: colors.accent },
+                            d.isToday &&
+                              !d.isSelected && {
+                                borderColor: colors.accent,
+                                borderWidth: 1.5,
+                              },
+                          ]}
+                          activeOpacity={0.75}
+                        >
+                          <Text
+                            style={[
+                              styles.dayNumberText,
+                              {
+                                color: d.isSelected
+                                  ? "#FFFFFF"
+                                  : d.isPast
+                                    ? colors.textMuted
+                                    : colors.text,
+                                fontFamily:
+                                  d.isSelected || d.isToday
+                                    ? FONTS.bold
+                                    : FONTS.regular,
+                                opacity: d.isPast ? 0.35 : 1,
+                              },
+                            ]}
+                          >
+                            {d.dayNumber}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              ))}
             </View>
 
             {/* Time Selector Controls */}
@@ -761,34 +788,36 @@ const styles = StyleSheet.create({
   },
   weekDaysRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 6,
+    alignItems: "center",
+    marginBottom: 6,
   },
-  weekDayText: {
-    width: 38,
-    textAlign: "center",
-    fontSize: 11,
-    fontFamily: FONTS.bold,
-  },
-  daysGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
+  weeksContainer: {
     gap: 4,
   },
-  emptyDaySlot: {
-    width: 38,
-    height: 38,
+  weekRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  daySlotWrap: {
+    flex: 1,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  weekDayText: {
+    textAlign: "center",
+    fontSize: 12,
+    fontFamily: FONTS.bold,
   },
   daySlot: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
   dayNumberText: {
-    fontSize: 13,
+    fontSize: 13.5,
   },
   timeSelectorBox: {
     borderRadius: BORDER_RADIUS.md,
