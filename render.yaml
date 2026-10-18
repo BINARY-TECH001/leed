@@ -7,7 +7,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install && npm run build --workspace=@prospect/backend
+    buildCommand: npm install --include=dev && npm run build --workspace=@prospect/backend
     startCommand: cd apps/backend && npx prisma db push && npm start
     healthCheckPath: /health
     autoDeploy: true
