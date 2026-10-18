@@ -5,7 +5,13 @@ class CacheService {
   private memoryFallback = new Map<string, { value: string; expiresAt: number }>();
 
   constructor() {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const redisUrl = process.env.REDIS_URL;
+
+    // Only attempt Redis connection if REDIS_URL is explicitly configured
+    if (!redisUrl) {
+      return;
+    }
+
     try {
       this.client = new Redis(redisUrl, {
         lazyConnect: true,
@@ -16,8 +22,12 @@ class CacheService {
         },
       });
 
+      // Attach error listener to prevent unhandled EventEmitter crashes
+      this.client.on('error', () => {
+        this.client = null;
+      });
+
       this.client.connect().catch(() => {
-        // Redis not running locally, seamlessly fallback to in-memory cache
         this.client = null;
       });
     } catch {
