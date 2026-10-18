@@ -12,6 +12,8 @@ export default function IndexScreen() {
 
     if (authState === 'authenticated') {
       router.replace('/(tabs)');
+    } else if (authState === 'verification_required') {
+      router.replace('/(auth)/verify-email');
     } else if (authState === 'onboarding') {
       router.replace('/(auth)/onboarding');
     } else {

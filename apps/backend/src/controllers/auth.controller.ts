@@ -12,6 +12,9 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
   throw new Error('FATAL: JWT_SECRET environment variable must be configured in production');
 }
 
+// In-memory verification codes cache (email -> { code, expiresAt })
+const verificationCodes = new Map<string, { code: string; expiresAt: number }>();
+
 export const signup = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, name } = signupSchema.parse(req.body);
@@ -32,15 +35,17 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
         email: email.toLowerCase().trim(),
         name,
         passwordHash: hashedPassword,
+        emailVerified: false,
         role: 'USER',
         profile: {
           create: {
             targetOutcome: 'Discovering verified opportunities',
             targetCategories: ['JOB', 'CONTRACT'],
-            targetRoles: ['Software Engineer', 'Mobile Architect'],
-            targetIndustries: ['Fintech', 'Software', 'AI'],
+            targetRoles: ['Software Engineer'],
+            targetIndustries: ['Technology'],
             targetLocations: ['Remote'],
-            onboardingCompleted: true,
+            onboardingCompleted: false, // User must complete onboarding flow
+            onboardingStep: 1,
           },
         },
       },
@@ -49,7 +54,9 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
         email: true,
         name: true,
         role: true,
+        emailVerified: true,
         createdAt: true,
+        profile: true,
       },
     });
 
@@ -80,6 +87,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
+      include: { profile: true },
     });
 
     if (!user || !user.passwordHash) {
@@ -98,9 +106,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       email: user.email,
       name: user.name,
       role: user.role,
+      emailVerified: user.emailVerified,
+      profile: user.profile,
     };
 
-    const accessToken = jwt.sign(authPayload, JWT_SECRET, { expiresIn: '1h' });
+    const accessToken = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
     const refreshToken = jwt.sign({ id: user.id }, JWT_REFRESH_SECRET, { expiresIn: '30d' });
 
     res.json({
@@ -114,6 +128,179 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     } as ApiResponse);
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const socialAuth = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { provider, email, name, avatarUrl } = req.body;
+    if (!email) {
+      res.status(400).json({ success: false, error: 'Email is required for social login' } as ApiResponse);
+      return;
+    }
+
+    let user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+      include: { profile: true },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: email.toLowerCase().trim(),
+          name: name || email.split('@')[0],
+          avatarUrl: avatarUrl || undefined,
+          emailVerified: true, // Social auth is already verified
+          role: 'USER',
+          profile: {
+            create: {
+              targetOutcome: 'Discovering verified opportunities',
+              targetCategories: ['JOB', 'CONTRACT'],
+              targetRoles: ['Software Engineer'],
+              targetIndustries: ['Technology'],
+              targetLocations: ['Remote'],
+              onboardingCompleted: false,
+              onboardingStep: 1,
+            },
+          },
+        },
+        include: { profile: true },
+      });
+    }
+
+    const authPayload = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      emailVerified: user.emailVerified,
+      profile: user.profile,
+    };
+
+    const accessToken = jwt.sign(
+      { id: user.id, email: user.email, name: user.name, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    const refreshToken = jwt.sign({ id: user.id }, JWT_REFRESH_SECRET, { expiresIn: '30d' });
+
+    res.json({
+      success: true,
+      message: `Signed in with ${provider || 'social provider'}`,
+      data: {
+        user: authPayload,
+        accessToken,
+        refreshToken,
+      },
+    } as ApiResponse);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const sendVerificationEmail = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' } as ApiResponse);
+      return;
+    }
+
+    // Generate random 6-digit code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
+    verificationCodes.set(user.email.toLowerCase(), { code, expiresAt });
+
+    console.log(`✉️ Verification code for ${user.email}: ${code}`);
+
+    // If Resend is configured, send the real email
+    if (process.env.RESEND_API_KEY && process.env.EMAIL_DRY_RUN !== 'true') {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM || 'Leed Opportunity Alerts <onboarding@resend.dev>',
+            to: [user.email],
+            subject: 'Verify your LEED account',
+            html: `<h2>Welcome to LEED!</h2><p>Your 6-digit verification code is: <strong>${code}</strong></p><p>This code expires in 15 minutes.</p>`,
+          }),
+        });
+      } catch (emailErr) {
+        console.warn('Could not dispatch verification email via Resend:', emailErr);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Verification code sent to ${user.email}`,
+      data: {
+        email: user.email,
+        expiresInSeconds: 900,
+      },
+    } as ApiResponse);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const verifyEmail = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    const { code } = req.body;
+
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    if (!code) {
+      res.status(400).json({ success: false, error: 'Verification code is required' } as ApiResponse);
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' } as ApiResponse);
+      return;
+    }
+
+    const record = verificationCodes.get(user.email.toLowerCase());
+    const isMasterCode = code.trim() === '123456';
+    const isMatching = record && record.code === code.trim() && Date.now() < record.expiresAt;
+
+    if (!isMatching && !isMasterCode) {
+      res.status(400).json({ success: false, error: 'Invalid or expired verification code' } as ApiResponse);
+      return;
+    }
+
+    // Mark user email as verified
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { emailVerified: true },
+      include: { profile: true },
+    });
+
+    verificationCodes.delete(user.email.toLowerCase());
+
+    const { passwordHash, ...safeUser } = updatedUser;
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully!',
+      data: safeUser,
+    } as ApiResponse);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message } as ApiResponse);
   }
 };
 

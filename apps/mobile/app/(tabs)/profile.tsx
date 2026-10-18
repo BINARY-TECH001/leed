@@ -31,6 +31,9 @@ import {
   ShieldSecurity,
 } from 'iconsax-react-native';
 import * as Haptics from 'expo-haptics';
+import { useQuery } from '@tanstack/react-query';
+import { radarService } from '@/services/radarService';
+import { toast } from 'sonner-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 160;
@@ -52,8 +55,24 @@ export default function ProfileScreen() {
   const [pickerInitialTab, setPickerInitialTab] = useState<'avatar' | 'cover'>('avatar');
   const [isSignOutSheetOpen, setIsSignOutSheetOpen] = useState(false);
 
-  const userName = user?.name || "";
+  const { data: radars = [] } = useQuery({
+    queryKey: ['radars'],
+    queryFn: () => radarService.getRadars(),
+  });
+
+  const userName = user?.name || '';
   const userEmail = user?.email || '';
+
+  const completenessPercent = React.useMemo(() => {
+    let score = 0;
+    if (user?.name) score += 20;
+    if (user?.email) score += 15;
+    if (user?.emailVerified) score += 25;
+    if (user?.headline || user?.targetOutcome) score += 15;
+    if (user?.targetCategories && user.targetCategories.length > 0) score += 15;
+    if (user?.targetLocations && user.targetLocations.length > 0) score += 10;
+    return Math.min(score, 100);
+  }, [user]);
 
   const handleNavigate = (route: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -76,6 +95,7 @@ export default function ProfileScreen() {
     setIsSignOutSheetOpen(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await logout();
+    toast.success('Signed out safely');
     router.replace('/(auth)/landing');
   };
 
@@ -153,16 +173,42 @@ export default function ProfileScreen() {
 
           {/* User Details */}
           <View style={styles.detailsWrap}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Text style={[styles.userName, { color: colors.text }]}>
-                {userName}
+                {userName || 'Anonymous User'}
               </Text>
-              <TickCircle size={20} color="#10B981" variant="Bold" />
+              {user?.emailVerified ? (
+                <View style={styles.verifiedRow}>
+                  <TickCircle size={18} color="#10B981" variant="Bold" />
+                  <Text style={styles.verifiedBadgeText}>Verified</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.unverifiedBadge}
+                  onPress={() => router.push('/(auth)/verify-email')}
+                  activeOpacity={0.8}
+                >
+                  <ShieldSecurity size={14} color="#D97706" variant="Bold" />
+                  <Text style={styles.unverifiedBadgeText}>Unverified · Tap to Verify</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            <Text style={[styles.userHeadline, { color: colors.textSecondary }]}>
-              Principal Mobile Architect & Distributed Systems
-            </Text>
+            {user?.headline || user?.targetOutcome ? (
+              <Text style={[styles.userHeadline, { color: colors.textSecondary }]}>
+                {user.headline || user.targetOutcome}
+              </Text>
+            ) : (
+              <TouchableOpacity
+                onPress={() => handleNavigate('/profile/personal')}
+                activeOpacity={0.7}
+                style={styles.emptyHeadlineWrap}
+              >
+                <Text style={[styles.emptyHeadline, { color: colors.accent }]}>
+                  + Add headline & professional focus
+                </Text>
+              </TouchableOpacity>
+            )}
 
             <Text style={[styles.userEmail, { color: colors.textMuted }]}>
               {userEmail}
@@ -170,26 +216,55 @@ export default function ProfileScreen() {
 
             {/* Location & Status Pills */}
             <View style={styles.pillsRow}>
-              <View
-                style={[
-                  styles.pill,
-                  { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
-                ]}
-              >
-                <Text style={[styles.pillText, { color: colors.textSecondary }]}>
-                  📍 San Francisco · Remote
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.pill,
-                  { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5' },
-                ]}
-              >
-                <Text style={[styles.pillText, { color: '#10B981', fontFamily: FONTS.semiBold }]}>
-                  ⚡ Radar Active (124 streams)
-                </Text>
-              </View>
+              {user?.targetLocations && user.targetLocations.length > 0 ? (
+                <View
+                  style={[
+                    styles.pill,
+                    { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
+                  ]}
+                >
+                  <Text style={[styles.pillText, { color: colors.textSecondary }]}>
+                    📍 {user.targetLocations.slice(0, 2).join(' · ')}
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.pill,
+                    { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
+                  ]}
+                  onPress={() => handleNavigate('/profile/preferences')}
+                >
+                  <Text style={[styles.pillText, { color: colors.textMuted }]}>
+                    📍 Add locations
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {radars.length > 0 ? (
+                <View
+                  style={[
+                    styles.pill,
+                    { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5' },
+                  ]}
+                >
+                  <Text style={[styles.pillText, { color: '#10B981', fontFamily: FONTS.semiBold }]}>
+                    ⚡ Radar Active ({radars.length} {radars.length === 1 ? 'stream' : 'streams'})
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.pill,
+                    { backgroundColor: isDark ? 'rgba(255, 102, 0, 0.15)' : '#FFF0E6' },
+                  ]}
+                  onPress={() => router.push('/(tabs)/radar')}
+                >
+                  <Text style={[styles.pillText, { color: colors.accent, fontFamily: FONTS.semiBold }]}>
+                    ⚡ Create 1st Radar
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -218,7 +293,7 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               <Text style={[styles.completenessPercent, { color: '#10B981' }]}>
-                85%
+                {completenessPercent}%
               </Text>
             </View>
 
@@ -229,7 +304,12 @@ export default function ProfileScreen() {
                 { backgroundColor: isDark ? '#334155' : '#DCFCE7' },
               ]}
             >
-              <View style={[styles.progressBarFill, { width: '85%', backgroundColor: '#10B981' }]} />
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${completenessPercent}%`, backgroundColor: '#10B981' },
+                ]}
+              />
             </View>
 
             <Text
@@ -606,10 +686,47 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: -0.4,
   },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  verifiedBadgeText: {
+    color: '#10B981',
+    fontFamily: FONTS.semibold,
+    fontSize: 12,
+  },
+  unverifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.full,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  unverifiedBadgeText: {
+    color: '#D97706',
+    fontFamily: FONTS.semibold,
+    fontSize: 11.5,
+  },
   userHeadline: {
     fontFamily: FONTS.medium,
     fontSize: 14,
     marginTop: 2,
+  },
+  emptyHeadlineWrap: {
+    paddingVertical: 3,
+  },
+  emptyHeadline: {
+    fontFamily: FONTS.medium,
+    fontSize: 13,
   },
   userEmail: {
     fontFamily: FONTS.regular,

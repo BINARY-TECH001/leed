@@ -11,6 +11,13 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: LoginCredentials) => Promise<UserProfile>;
   register: (credentials: SignupCredentials) => Promise<UserProfile>;
+  verifyEmail: (code: string) => Promise<UserProfile>;
+  socialLogin: (payload: {
+    provider: 'google' | 'apple';
+    email: string;
+    name?: string;
+    avatarUrl?: string;
+  }) => Promise<UserProfile>;
   logout: () => Promise<void>;
   updateUser: (updatedUser: Partial<UserProfile>) => void;
   setOnboardingDone: () => Promise<void>;
@@ -30,9 +37,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const freshUser = await authService.getMe();
       setUser(freshUser);
       queryClient.setQueryData(authKeys.me(), freshUser);
+
+      // Re-evaluate auth state based on server truth
+      if (!freshUser.emailVerified) {
+        setAuthState('verification_required');
+      } else if (!freshUser.onboardingCompleted) {
+        setAuthState('onboarding');
+      } else {
+        setAuthState('authenticated');
+      }
+
       return freshUser;
     } catch (err: any) {
-      // If unauthorized, token is no longer valid
       if (err?.response?.status === 401) {
         await logout();
       }
@@ -52,10 +68,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(storedProfile);
           queryClient.setQueryData(authKeys.me(), storedProfile);
 
-          if (storedProfile.onboardingCompleted) {
-            setAuthState('authenticated');
-          } else {
+          if (!storedProfile.emailVerified) {
+            setAuthState('verification_required');
+          } else if (!storedProfile.onboardingCompleted) {
             setAuthState('onboarding');
+          } else {
+            setAuthState('authenticated');
           }
 
           // Verify with live backend in background
@@ -80,11 +98,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await authService.login(credentials);
       setUser(data.user);
 
-      // Seed & invalidate TanStack Query cache
       queryClient.setQueryData(authKeys.me(), data.user);
       await queryClient.invalidateQueries({ queryKey: authKeys.all });
 
-      setAuthState(data.user.onboardingCompleted ? 'authenticated' : 'onboarding');
+      if (!data.user.emailVerified) {
+        setAuthState('verification_required');
+      } else if (!data.user.onboardingCompleted) {
+        setAuthState('onboarding');
+      } else {
+        setAuthState('authenticated');
+      }
       return data.user;
     } finally {
       setIsLoading(false);
@@ -97,11 +120,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await authService.signup(credentials);
       setUser(data.user);
 
-      // Seed & invalidate TanStack Query cache
       queryClient.setQueryData(authKeys.me(), data.user);
       await queryClient.invalidateQueries({ queryKey: authKeys.all });
 
-      setAuthState('onboarding');
+      // Always require verification first for new signups
+      setAuthState('verification_required');
+      return data.user;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const verifyEmail = async (code: string): Promise<UserProfile> => {
+    setIsLoading(true);
+    try {
+      const updatedUser = await authService.verifyEmail(code);
+      setUser(updatedUser);
+      queryClient.setQueryData(authKeys.me(), updatedUser);
+      await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUser));
+
+      if (!updatedUser.onboardingCompleted) {
+        setAuthState('onboarding');
+      } else {
+        setAuthState('authenticated');
+      }
+      return updatedUser;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const socialLogin = async (payload: {
+    provider: 'google' | 'apple';
+    email: string;
+    name?: string;
+    avatarUrl?: string;
+  }): Promise<UserProfile> => {
+    setIsLoading(true);
+    try {
+      const data = await authService.socialAuth(payload);
+      setUser(data.user);
+      queryClient.setQueryData(authKeys.me(), data.user);
+      await queryClient.invalidateQueries({ queryKey: authKeys.all });
+
+      if (!data.user.emailVerified) {
+        setAuthState('verification_required');
+      } else if (!data.user.onboardingCompleted) {
+        setAuthState('onboarding');
+      } else {
+        setAuthState('authenticated');
+      }
       return data.user;
     } finally {
       setIsLoading(false);
@@ -113,7 +181,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await authService.logout();
     } finally {
-      // Invalidate and clear all TanStack Query cached data
       queryClient.clear();
       setUser(null);
       setAuthState('unauthenticated');
@@ -149,6 +216,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        verifyEmail,
+        socialLogin,
         logout,
         updateUser,
         setOnboardingDone,

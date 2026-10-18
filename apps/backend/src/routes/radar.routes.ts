@@ -9,9 +9,9 @@ import { authenticateToken } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-router.get('/', getRadars);
+router.get('/', authenticateToken, getRadars);
 router.post('/', authenticateToken, createRadar);
-router.get('/:id', getRadarById);
+router.get('/:id', authenticateToken, getRadarById);
 router.post('/:id/scan', authenticateToken, triggerRadarScan);
 
 export default router;

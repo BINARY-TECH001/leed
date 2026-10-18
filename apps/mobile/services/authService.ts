@@ -119,6 +119,77 @@ export const authService = {
   },
 
   /**
+   * Request email verification code sent to user email
+   */
+  async sendVerificationEmail(): Promise<{ message: string; email: string }> {
+    const response = await api.post<{
+      success: boolean;
+      message: string;
+      data?: { email: string };
+    }>('/auth/send-verification-email');
+
+    return {
+      message: response.data?.message || 'Verification code dispatched.',
+      email: response.data?.data?.email || '',
+    };
+  },
+
+  /**
+   * Submit 6-digit email verification code
+   */
+  async verifyEmail(code: string): Promise<UserProfile> {
+    const response = await api.post<{
+      success: boolean;
+      data: UserProfile;
+      message?: string;
+    }>('/auth/verify-email', { code: code.trim() });
+
+    if (!response.data?.data) {
+      throw new Error(response.data?.message || 'Invalid or expired verification code.');
+    }
+
+    const updatedUser = response.data.data;
+    await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.USER_PROFILE, JSON.stringify(updatedUser));
+    return updatedUser;
+  },
+
+  /**
+   * Authenticate with Google or Apple
+   */
+  async socialAuth(payload: {
+    provider: 'google' | 'apple';
+    email: string;
+    name?: string;
+    avatarUrl?: string;
+  }): Promise<AuthResponseData> {
+    const response = await api.post<{
+      success: boolean;
+      data: AuthResponseData;
+      message?: string;
+    }>('/auth/social', payload);
+
+    const data = response.data?.data;
+    if (!data || !data.accessToken) {
+      throw new Error(response.data?.message || 'Social authentication failed.');
+    }
+
+    await AsyncStorage.multiSet([
+      [CONFIG.STORAGE_KEYS.AUTH_TOKEN, data.accessToken],
+      [CONFIG.STORAGE_KEYS.REFRESH_TOKEN, data.refreshToken],
+      [CONFIG.STORAGE_KEYS.USER_PROFILE, JSON.stringify(data.user)],
+    ]);
+
+    return data;
+  },
+
+  /**
+   * Complete onboarding process
+   */
+  async completeOnboarding(payload?: any): Promise<void> {
+    await api.post('/onboarding/complete', payload || {}).catch(() => {});
+  },
+
+  /**
    * Read stored profile from local storage
    */
   async getStoredProfile(): Promise<UserProfile | null> {

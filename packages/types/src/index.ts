@@ -187,7 +187,9 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
+  emailVerified?: boolean;
   avatarUrl?: string;
+  headline?: string;
   bio: string;
   targetOutcome: string;
   targetCategories: OpportunityType[];

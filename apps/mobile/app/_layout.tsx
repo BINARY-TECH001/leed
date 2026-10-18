@@ -19,6 +19,7 @@ import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { PipelineProvider } from '@/context/PipelineContext';
 import { queryClient } from '@/services/queryClient';
+import { Toaster } from 'sonner-native';
 
 // Prevent native splash screen from hiding until fonts are loaded
 SplashScreen.preventAutoHideAsync();
@@ -159,6 +160,7 @@ function RootNavigator() {
           }}
         />
       </Stack>
+      <Toaster theme={isDark ? 'dark' : 'light'} richColors position="top-center" />
     </>
   );
 }
