@@ -1,6 +1,5 @@
 import { api } from './api';
 import type { OpportunityRadar, AutonomyLevel, OpportunityType } from '@prospect/types';
-import { SAMPLE_RADARS } from '@/constants/mockData';
 
 export interface CreateRadarPayload {
   title: string;
@@ -14,30 +13,21 @@ export const radarService = {
   async getRadars(): Promise<OpportunityRadar[]> {
     try {
       const response = await api.get<{ success: boolean; data: OpportunityRadar[] }>('/radars');
-      if (response.data?.success && Array.isArray(response.data.data) && response.data.data.length > 0) {
+      if (response.data?.success && Array.isArray(response.data.data)) {
         return response.data.data;
       }
-    } catch {
-      // Graceful offline fallback
+    } catch (err) {
+      console.warn('Network error fetching radars:', err);
     }
-    return SAMPLE_RADARS;
+    return [];
   },
 
   async getRadarById(id: string): Promise<OpportunityRadar> {
-    try {
-      const response = await api.get<{ success: boolean; data: OpportunityRadar }>(`/radars/${id}`);
-      if (response.data?.success && response.data.data) {
-        return response.data.data;
-      }
-    } catch {
-      // Fallback
+    const response = await api.get<{ success: boolean; data: OpportunityRadar }>(`/radars/${id}`);
+    if (response.data?.success && response.data.data) {
+      return response.data.data;
     }
-
-    const found = SAMPLE_RADARS.find((r) => r.id === id);
-    if (!found) {
-      throw new Error(`Radar ${id} not found`);
-    }
-    return found;
+    throw new Error(`Radar ${id} not found`);
   },
 
   async createRadar(payload: CreateRadarPayload): Promise<OpportunityRadar> {
@@ -57,8 +47,8 @@ export const radarService = {
       status: 'active',
       lastRunAt: new Date().toISOString(),
       nextRunAt: new Date(Date.now() + 86400000).toISOString(),
-      totalFound: 4,
-      newSinceLastCheck: 4,
+      totalFound: 0,
+      newSinceLastCheck: 0,
       autonomyLevel: payload.autonomyLevel,
       targetCriteria: {},
       createdDate: new Date().toISOString(),
@@ -72,8 +62,8 @@ export const radarService = {
       if (response.data?.success && response.data.data) {
         return response.data.data;
       }
-    } catch {
-      // Return simulated radar
+    } catch (err) {
+      console.warn('Could not persist radar to backend API:', err);
     }
 
     return newRadar;
@@ -87,13 +77,13 @@ export const radarService = {
       if (response.data?.success && response.data.data) {
         return response.data.data;
       }
-    } catch {
-      // Simulated scan run
+    } catch (err) {
+      console.warn('Scan trigger error:', err);
     }
 
     return {
-      totalFound: 6,
-      newFound: 2,
+      totalFound: 0,
+      newFound: 0,
     };
   },
 };

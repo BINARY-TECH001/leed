@@ -6,10 +6,12 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma db push",
+    "seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --env-file=.env --import tsx --test 'tests/**/*.test.ts'"
   },

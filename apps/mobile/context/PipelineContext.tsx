@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useMemo } from 'react';
 import type { Opportunity, OpportunityStatus } from '@prospect/types';
-import { SAMPLE_OPPORTUNITIES, SAMPLE_RADARS } from '@/constants/mockData';
 import * as Haptics from 'expo-haptics';
 
 export type PipelineStage =
@@ -32,7 +31,7 @@ interface PipelineContextType {
   getRecord: (oppId: string) => PipelineRecord | undefined;
   toggleSave: (opp: Opportunity) => void;
   applyToOpportunity: (opp: Opportunity, customNote?: string) => void;
-  scheduleFollowUp: (oppId: string, date: string, objective: string) => void;
+  scheduleFollowUp: (oppId: string, date: string, objective: string, opp?: Opportunity) => void;
   updateStage: (oppId: string, newStage: PipelineStage) => void;
   updateNotes: (oppId: string, notes: string) => void;
   removeFromPipeline: (oppId: string) => void;
@@ -49,50 +48,8 @@ interface PipelineContextType {
 
 const PipelineContext = createContext<PipelineContextType | undefined>(undefined);
 
-// Initial realistic pipeline items calibrated to sample opportunities
-const INITIAL_RECORDS: PipelineRecord[] = [
-  {
-    id: 'pipe-1',
-    opportunityId: 'opp-3',
-    opportunity: SAMPLE_OPPORTUNITIES[2], // Linear
-    stage: 'interviewing',
-    appliedAt: '3 days ago',
-    followUpDate: 'Tomorrow at 10:00 AM',
-    followUpObjective: 'Technical Architecture Round with Mobile Lead',
-    notes: 'Covered offline queue synchronization and CRDT conflict resolution. Impressed with performance benchmarks.',
-    updatedAt: '2026-10-12T14:30:00Z',
-  },
-  {
-    id: 'pipe-2',
-    opportunityId: 'opp-2',
-    opportunity: SAMPLE_OPPORTUNITIES[1], // Vercel
-    stage: 'applied',
-    appliedAt: 'Yesterday',
-    followUpDate: 'In 3 Days',
-    followUpObjective: 'Direct check-in with Guillermo / Eng recruiter',
-    notes: 'Autonomous proposal generated using Principal Architect CV. Highlighted AI workflow optimizations.',
-    updatedAt: '2026-10-12T18:00:00Z',
-  },
-  {
-    id: 'pipe-3',
-    opportunityId: 'opp-1',
-    opportunity: SAMPLE_OPPORTUNITIES[0], // Fintech Velocity
-    stage: 'follow_up',
-    appliedAt: '4 days ago',
-    followUpDate: 'Today',
-    followUpObjective: 'Send SOC2 compliance case study and ledger benchmarks',
-    notes: 'Hourly rate agreed at $145/hr. Awaiting SOW draft approval.',
-    updatedAt: '2026-10-13T09:15:00Z',
-  },
-  {
-    id: 'pipe-4',
-    opportunityId: 'opp-4',
-    opportunity: SAMPLE_OPPORTUNITIES[3], // Northline Studio
-    stage: 'saved',
-    notes: 'High potential for retainer extension beyond initial $28k scope.',
-    updatedAt: '2026-10-11T16:00:00Z',
-  },
-];
+// Initial empty pipeline for real user activity
+const INITIAL_RECORDS: PipelineRecord[] = [];
 
 export const PipelineProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [records, setRecords] = useState<PipelineRecord[]>(INITIAL_RECORDS);
@@ -180,10 +137,9 @@ export const PipelineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
-  const scheduleFollowUp = (oppId: string, date: string, objective: string) => {
+  const scheduleFollowUp = (oppId: string, date: string, objective: string, opp?: Opportunity) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setRecords((prev) => {
-      const opp = SAMPLE_OPPORTUNITIES.find((o) => o.id === oppId);
       const existing = prev.find((r) => r.opportunityId === oppId);
 
       if (existing) {
@@ -249,8 +205,8 @@ export const PipelineProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       followUpsDueCount: records.filter(
         (r) => r.stage === 'follow_up' || (r.followUpDate && r.followUpDate.includes('Today'))
       ).length,
-      activeRadars: SAMPLE_RADARS.filter((r) => r.status === 'active').length,
-      totalMatches: SAMPLE_OPPORTUNITIES.length,
+      activeRadars: 0,
+      totalMatches: records.length,
     };
   }, [records]);
 
