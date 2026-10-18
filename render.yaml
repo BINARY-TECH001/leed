@@ -25,9 +25,9 @@ services:
           name: leed-db
           property: connectionString
       - key: JWT_SECRET
-        generateCrypto: true
+        generateValue: true
       - key: JWT_REFRESH_SECRET
-        generateCrypto: true
+        generateValue: true
       - key: TELEGRAM_ENABLED
         value: "true"
       - key: TELEGRAM_DRY_RUN
@@ -50,7 +50,7 @@ services:
         value: "60000"
       - key: FRESHNESS_WORKER_INTERVAL_MS
         value: "300000"
-      # Operator API keys (Fill in Render Dashboard or sync with secrets)
+      # Operator API keys (Prompted in Render Dashboard upon deployment)
       - key: GEMINI_API_KEY
         sync: false
       - key: TELEGRAM_BOT_TOKEN
