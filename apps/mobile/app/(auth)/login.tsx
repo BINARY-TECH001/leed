@@ -30,18 +30,29 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setErrorMessage('Please enter both your email and password.');
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsLoading(true);
+    setErrorMessage(null);
 
     try {
-      await login(email.trim().toLowerCase() || 'alex@example.com', password || 'password123');
+      await login({ email: email.trim().toLowerCase(), password });
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.warn('Login attempt:', err);
-      // Fallback guarantees user is logged in
-      router.replace('/(tabs)');
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Authentication failed. Please verify credentials.';
+      setErrorMessage(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +84,21 @@ export default function LoginScreen() {
                 Sign in to resume radar scanning and outreach.
               </Text>
             </View>
+
+            {/* Inline Error Banner */}
+            {errorMessage && (
+              <View
+                style={[
+                  styles.errorBanner,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEE2E2',
+                    borderColor: colors.error,
+                  },
+                ]}
+              >
+                <Text style={[styles.errorText, { color: colors.error }]}>{errorMessage}</Text>
+              </View>
+            )}
 
             {/* Clean Fullscreen Form (No Card Box) */}
             <View style={styles.formContainer}>
@@ -207,6 +233,17 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: SPACING.xl,
+  },
+  errorBanner: {
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.lg,
+  },
+  errorText: {
+    fontSize: 13.5,
+    fontFamily: FONTS.medium,
+    lineHeight: 18,
   },
   title: {
     fontSize: 28,

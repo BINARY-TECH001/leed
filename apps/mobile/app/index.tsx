@@ -1,13 +1,11 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
+import { AuthSessionSkeleton } from '@/components/ui';
 
 export default function IndexScreen() {
   const router = useRouter();
   const { authState, isLoading } = useAuth();
-  const { colors } = useTheme();
 
   useEffect(() => {
     if (isLoading) return;
@@ -21,17 +19,5 @@ export default function IndexScreen() {
     }
   }, [authState, isLoading, router]);
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ActivityIndicator size="large" color={colors.accent} />
-    </View>
-  );
+  return <AuthSessionSkeleton />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

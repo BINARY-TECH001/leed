@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,54 +9,83 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   Keyboard,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { useTheme } from '@/context/ThemeContext';
-import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui';
-import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
-import { ArrowLeft2, Eye, EyeSlash, Lock, Sms, User } from 'iconsax-react-native';
-import * as Haptics from 'expo-haptics';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
+import { Button } from "@/components/ui";
+import { BORDER_RADIUS, FONTS, SPACING } from "@/constants/theme";
+import {
+  ArrowLeft2,
+  Eye,
+  EyeSlash,
+  Lock,
+  Sms,
+  User,
+} from "iconsax-react-native";
+import * as Haptics from "expo-haptics";
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const { register } = useAuth();
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [nameFocused, setNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   const handleSignUp = async () => {
+    if (!name.trim()) {
+      setErrorMessage("Please enter your full name.");
+      return;
+    }
+    if (!email.trim()) {
+      setErrorMessage("Please enter your email address.");
+      return;
+    }
+    if (!password || password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsLoading(true);
+    setErrorMessage(null);
 
     try {
-      await register(
-        name.trim() || 'Alex Rivers',
-        email.trim().toLowerCase() || 'alex@example.com',
-        password || 'password123'
-      );
-      router.replace('/(auth)/onboarding');
+      await register({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      router.replace("/(auth)/onboarding");
     } catch (err: any) {
-      console.warn('SignUp attempt:', err);
-      router.replace('/(auth)/onboarding');
+      const msg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Registration failed. Please try again.";
+      setErrorMessage(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: colors.background }]}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardContainer}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -64,7 +93,14 @@ export default function SignUpScreen() {
             {/* Top Bar with Back Arrow */}
             <View style={styles.topBar}>
               <TouchableOpacity
-                style={[styles.backBtn, { backgroundColor: isDark ? colors.surfaceSecondary : '#F0F4FA' }]}
+                style={[
+                  styles.backBtn,
+                  {
+                    backgroundColor: isDark
+                      ? colors.surfaceSecondary
+                      : "#F0F4FA",
+                  },
+                ]}
                 onPress={() => router.back()}
                 activeOpacity={0.7}
               >
@@ -74,31 +110,61 @@ export default function SignUpScreen() {
 
             {/* Header Content with Rich Whitespace */}
             <View style={styles.header}>
-              <Text style={[styles.title, { color: colors.text }]}>Create Account</Text>
+              <Text style={[styles.title, { color: colors.text }]}>
+                Create Account
+              </Text>
               <Text style={[styles.subtitle, { color: colors.textMuted }]}>
                 Join LEED to unleash autonomous opportunity discovery.
               </Text>
             </View>
 
+            {/* Inline Error Banner */}
+            {errorMessage && (
+              <View
+                style={[
+                  styles.errorBanner,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(239, 68, 68, 0.15)"
+                      : "#FEE2E2",
+                    borderColor: colors.error,
+                  },
+                ]}
+              >
+                <Text style={[styles.errorText, { color: colors.error }]}>
+                  {errorMessage}
+                </Text>
+              </View>
+            )}
+
             {/* Clean Fullscreen Form (No Card Box) */}
             <View style={styles.formContainer}>
               {/* Name Field */}
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
                   Full Name
                 </Text>
                 <View
                   style={[
                     styles.inputWrapper,
                     {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      backgroundColor: isDark ? colors.card : "#FFFFFF",
                       borderColor: nameFocused ? colors.accent : colors.border,
                     },
                   ]}
                 >
-                  <User size={18} color={nameFocused ? colors.accent : colors.textMuted} variant="Linear" />
+                  <User
+                    size={18}
+                    color={nameFocused ? colors.accent : colors.textMuted}
+                    variant="Linear"
+                  />
                   <TextInput
-                    style={[styles.input, { color: colors.text, fontFamily: FONTS.regular }]}
+                    style={[
+                      styles.input,
+                      { color: colors.text, fontFamily: FONTS.regular },
+                    ]}
                     placeholder="Alex Rivers"
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="words"
@@ -113,21 +179,30 @@ export default function SignUpScreen() {
 
               {/* Email Field */}
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
                   Email
                 </Text>
                 <View
                   style={[
                     styles.inputWrapper,
                     {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      backgroundColor: isDark ? colors.card : "#FFFFFF",
                       borderColor: emailFocused ? colors.accent : colors.border,
                     },
                   ]}
                 >
-                  <Sms size={18} color={emailFocused ? colors.accent : colors.textMuted} variant="Linear" />
+                  <Sms
+                    size={18}
+                    color={emailFocused ? colors.accent : colors.textMuted}
+                    variant="Linear"
+                  />
                   <TextInput
-                    style={[styles.input, { color: colors.text, fontFamily: FONTS.regular }]}
+                    style={[
+                      styles.input,
+                      { color: colors.text, fontFamily: FONTS.regular },
+                    ]}
                     placeholder="name@example.com"
                     placeholderTextColor={colors.textMuted}
                     keyboardType="email-address"
@@ -143,21 +218,32 @@ export default function SignUpScreen() {
 
               {/* Password Field */}
               <View style={styles.fieldGroup}>
-                <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                <Text
+                  style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                >
                   Password
                 </Text>
                 <View
                   style={[
                     styles.inputWrapper,
                     {
-                      backgroundColor: isDark ? colors.card : '#FFFFFF',
-                      borderColor: passwordFocused ? colors.accent : colors.border,
+                      backgroundColor: isDark ? colors.card : "#FFFFFF",
+                      borderColor: passwordFocused
+                        ? colors.accent
+                        : colors.border,
                     },
                   ]}
                 >
-                  <Lock size={18} color={passwordFocused ? colors.accent : colors.textMuted} variant="Linear" />
+                  <Lock
+                    size={18}
+                    color={passwordFocused ? colors.accent : colors.textMuted}
+                    variant="Linear"
+                  />
                   <TextInput
-                    style={[styles.input, { color: colors.text, fontFamily: FONTS.regular }]}
+                    style={[
+                      styles.input,
+                      { color: colors.text, fontFamily: FONTS.regular },
+                    ]}
                     placeholder="Minimum 8 characters"
                     placeholderTextColor={colors.textMuted}
                     secureTextEntry={!showPassword}
@@ -172,9 +258,17 @@ export default function SignUpScreen() {
                     activeOpacity={0.7}
                   >
                     {showPassword ? (
-                      <EyeSlash size={18} color={colors.textMuted} variant="Linear" />
+                      <EyeSlash
+                        size={18}
+                        color={colors.textMuted}
+                        variant="Linear"
+                      />
                     ) : (
-                      <Eye size={18} color={colors.textMuted} variant="Linear" />
+                      <Eye
+                        size={18}
+                        color={colors.textMuted}
+                        variant="Linear"
+                      />
                     )}
                   </TouchableOpacity>
                 </View>
@@ -197,12 +291,14 @@ export default function SignUpScreen() {
 
               <TouchableOpacity
                 style={styles.toggleRow}
-                onPress={() => router.push('/(auth)/login')}
+                onPress={() => router.push("/(auth)/login")}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.toggleText, { color: colors.textMuted }]}>
-                  Already have an account?{' '}
-                  <Text style={{ color: colors.accent, fontFamily: FONTS.bold }}>
+                  Already have an account?{" "}
+                  <Text
+                    style={{ color: colors.accent, fontFamily: FONTS.bold }}
+                  >
                     Sign In
                   </Text>
                 </Text>
@@ -230,18 +326,29 @@ const styles = StyleSheet.create({
   },
   topBar: {
     height: 44,
-    justifyContent: 'center',
+    justifyContent: "center",
     marginBottom: SPACING.md,
   },
   backBtn: {
     width: 38,
     height: 38,
     borderRadius: BORDER_RADIUS.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   header: {
     marginBottom: SPACING.xl,
+  },
+  errorBanner: {
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.lg,
+  },
+  errorText: {
+    fontSize: 13.5,
+    fontFamily: FONTS.medium,
+    lineHeight: 18,
   },
   title: {
     fontSize: 28,
@@ -265,8 +372,8 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.semibold,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     height: 52,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1.2,
@@ -275,7 +382,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    height: '100%',
+    height: "100%",
     fontSize: 15,
   },
   eyeBtn: {
@@ -286,10 +393,10 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.md,
   },
   submitBtn: {
-    width: '100%',
+    width: "100%",
   },
   toggleRow: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 8,
   },
   toggleText: {

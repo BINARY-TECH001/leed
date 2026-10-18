@@ -68,12 +68,17 @@ api.interceptors.response.use(
           throw new Error('No refresh token available');
         }
 
-        const { data } = await axios.post<{ accessToken: string }>(
-          `${CONFIG.API_BASE_URL}/auth/refresh-token`,
-          { refreshToken }
-        );
+        const response = await axios.post<{
+          success?: boolean;
+          data?: { accessToken: string };
+          accessToken?: string;
+        }>(`${CONFIG.API_BASE_URL}/auth/refresh-token`, { refreshToken });
 
-        const newAccessToken = data.accessToken;
+        const newAccessToken = response.data?.data?.accessToken || response.data?.accessToken;
+        if (!newAccessToken) {
+          throw new Error('No access token returned from refresh endpoint');
+        }
+
         await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.AUTH_TOKEN, newAccessToken);
 
         processQueue(null, newAccessToken);

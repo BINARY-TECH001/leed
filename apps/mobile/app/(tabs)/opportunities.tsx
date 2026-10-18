@@ -14,7 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { usePipeline, type PipelineRecord } from '@/context/PipelineContext';
-import { Badge, EmptyState, CustomDateTimePickerSheet } from '@/components/ui';
+import { Badge, EmptyState, CustomDateTimePickerSheet, OpportunityCardSkeleton } from '@/components/ui';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { ActivePipelineRail } from '@/components/opportunities/ActivePipelineRail';
 import {
@@ -22,7 +22,6 @@ import {
   type DiscoveriesFilterState,
 } from '@/components/opportunities/DiscoveriesFilterBottomSheet';
 import { PipelineStagePickerSheet } from '@/components/pipeline/PipelineStagePickerSheet';
-import { SAMPLE_OPPORTUNITIES } from '@/constants/mockData';
 import { opportunityService } from '@/services/opportunityService';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
 import {
@@ -58,7 +57,8 @@ export default function OpportunitiesScreen() {
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState(params.initialQuery || '');
-  const [opportunities, setOpportunities] = useState<Opportunity[]>(SAMPLE_OPPORTUNITIES);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filter state for discoveries (Controlled via responsive BottomSheet)
@@ -77,8 +77,9 @@ export default function OpportunitiesScreen() {
   // Custom Date Time Picker Sheet state
   const [schedulingOpp, setSchedulingOpp] = useState<Opportunity | null>(null);
 
-  // Fetch opportunities with server search or graceful fallback
+  // Fetch opportunities with server search
   const fetchOpportunities = async () => {
+    setIsLoading(true);
     try {
       const data = await opportunityService.getOpportunities({
         query: searchQuery.trim() || undefined,
@@ -87,11 +88,11 @@ export default function OpportunitiesScreen() {
         highFitOnly: filterState.type === 'high_fit',
         minComp: filterState.minCompRate > 0 ? filterState.minCompRate : undefined,
       });
-      if (data && data.length > 0) {
-        setOpportunities(data);
-      }
-    } catch {
-      // Offline fallback
+      setOpportunities(data || []);
+    } catch (err) {
+      console.warn('Could not fetch opportunities:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -108,11 +109,11 @@ export default function OpportunitiesScreen() {
   // Distinct sources for filters
   const availableSources = useMemo(() => {
     const set = new Set<string>();
-    SAMPLE_OPPORTUNITIES.forEach((o) => {
+    opportunities.forEach((o) => {
       if (o.source) set.add(o.source);
     });
     return Array.from(set);
-  }, []);
+  }, [opportunities]);
 
   // Filtered Discoveries Feed
   const filteredOpportunities = useMemo(() => {
@@ -373,8 +374,14 @@ export default function OpportunitiesScreen() {
             <Badge label={`${filteredOpportunities.length} Available`} variant="success" size="sm" dot />
           </View>
 
-          {/* Opportunities Feed */}
-          {filteredOpportunities.length > 0 ? (
+          {/* Opportunities Feed with Skeleton Loader */}
+          {isLoading && opportunities.length === 0 ? (
+            <>
+              <OpportunityCardSkeleton />
+              <OpportunityCardSkeleton />
+              <OpportunityCardSkeleton />
+            </>
+          ) : filteredOpportunities.length > 0 ? (
             filteredOpportunities.map((opp) => (
               <OpportunityCard
                 key={opp.id}

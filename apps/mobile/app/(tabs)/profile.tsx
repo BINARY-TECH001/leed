@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme, ThemePreference } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { Card, Badge, ConfirmBottomSheet, AvatarCoverPickerSheet } from '@/components/ui';
+import { Card, Badge, ConfirmBottomSheet, AvatarCoverPickerSheet, ProfileScreenSkeleton } from '@/components/ui';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
 import {
   User,
@@ -44,7 +44,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, themePreference, setThemePreference, isDark } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
 
   const [coverUrl, setCoverUrl] = useState<string>(DEFAULT_COVER);
   const [avatarUrl, setAvatarUrl] = useState<string>(user?.avatarUrl || DEFAULT_AVATAR);
@@ -52,8 +52,8 @@ export default function ProfileScreen() {
   const [pickerInitialTab, setPickerInitialTab] = useState<'avatar' | 'cover'>('avatar');
   const [isSignOutSheetOpen, setIsSignOutSheetOpen] = useState(false);
 
-  const userName = user?.name || 'Alex Rivers';
-  const userEmail = user?.email || 'alex.rivers@prospectai.dev';
+  const userName = user?.name || "";
+  const userEmail = user?.email || '';
 
   const handleNavigate = (route: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -78,6 +78,10 @@ export default function ProfileScreen() {
     await logout();
     router.replace('/(auth)/landing');
   };
+
+  if (isLoading && !user) {
+    return <ProfileScreenSkeleton />;
+  }
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
