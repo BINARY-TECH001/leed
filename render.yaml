@@ -8,7 +8,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm install --include=dev && npm run build --workspace=@prospect/backend
-    startCommand: cd apps/backend && npx prisma db push && npm start
+    startCommand: cd apps/backend && npm start
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -21,7 +21,7 @@ services:
       - key: CORS_ORIGIN
         value: "*"
       - key: DATABASE_URL
-        value: "postgresql://postgres:Q1SwWJRE3uzt1Dul@db.afcvvbfpoqtvjggeeupa.supabase.co:5432/postgres"
+        value: "postgresql://postgres.afcvvbfpoqtvjggeeupa:Q1SwWJRE3uzt1Dul@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
