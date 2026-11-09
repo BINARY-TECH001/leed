@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
+  type TextInputInstance,
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
@@ -35,7 +36,7 @@ export default function VerifyEmailScreen() {
   const [timer, setTimer] = useState(RESEND_COOLDOWN);
   const [activeBoxIndex, setActiveBoxIndex] = useState(0);
 
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   // Countdown timer for resend
   useEffect(() => {

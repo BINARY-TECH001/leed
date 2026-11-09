@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   ScrollView,
   Platform,
@@ -74,7 +75,7 @@ export const CreateLeadSheet: React.FC<CreateLeadSheetProps> = ({
   const [leadNotes, setLeadNotes] = useState('');
   const [isSavingManual, setIsSavingManual] = useState(false);
 
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   // Voice toggle
   const handleVoiceToggle = () => {

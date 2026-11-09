@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Dimensions,
   ScrollView,
+  type ScrollViewInstance,
   TouchableOpacity,
   NativeSyntheticEvent,
   NativeScrollEvent,
@@ -61,7 +62,7 @@ const SLIDES: IntroSlide[] = [
 export default function LandingCarouselScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {

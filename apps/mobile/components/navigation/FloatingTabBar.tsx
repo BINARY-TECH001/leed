@@ -27,10 +27,14 @@ export interface FloatingTabBarProps {
     index: number;
     routes: Array<{ key: string; name: string; params?: any }>;
   };
-  navigation: {
-    emit: (event: any) => any;
-    navigate: (name: string, params?: any) => void;
+  navigation?: {
+    emit?: (event: any) => any;
+    navigate?: (name: string, params?: any) => void;
   };
+  emitter?: {
+    emit: (event: any) => any;
+  };
+  navigateToTab?: (routeKey: string) => void;
   descriptors?: any;
   insets?: any;
 }
@@ -38,6 +42,8 @@ export interface FloatingTabBarProps {
 export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
   state,
   navigation,
+  emitter,
+  navigateToTab,
 }) => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -130,14 +136,24 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
 
     const onPress = () => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      const event = navigation.emit({
-        type: 'tabPress',
-        target: route.key,
-        canPreventDefault: true,
-      });
+      const event = navigation?.emit
+        ? navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          })
+        : emitter?.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
 
-      if (!isFocused && !event.defaultPrevented) {
-        navigation.navigate(route.name);
+      if (!isFocused && !event?.defaultPrevented) {
+        if (navigateToTab) {
+          navigateToTab(route.key);
+        } else if (navigation?.navigate) {
+          navigation.navigate(route.name);
+        }
       }
     };
 

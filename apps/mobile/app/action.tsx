@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -118,7 +119,7 @@ export default function ActionScreen() {
   const [manualUrl, setManualUrl] = useState('');
   const [manualNotes, setManualNotes] = useState('');
 
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   const activeResource = resources.find((r) => r.isPrimary) || resources[0];
 

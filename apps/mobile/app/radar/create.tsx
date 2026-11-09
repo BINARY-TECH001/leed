@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
+  type TextInputInstance,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -84,7 +85,7 @@ export default function CreateRadarScreen() {
   const [isCustomPickerOpen, setIsCustomPickerOpen] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
 
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {

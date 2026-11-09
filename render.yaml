@@ -21,7 +21,7 @@ services:
       - key: CORS_ORIGIN
         value: "*"
       - key: DATABASE_URL
-        value: "postgresql://postgres.afcvvbfpoqtvjggeeupa:Q1SwWJRE3uzt1Dul@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+        value: "postgresql://postgres.tviwkzbtlnprwgspnbzl:wrJSIJ1JjNm2zuEx@aws-0-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
