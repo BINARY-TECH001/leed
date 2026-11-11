@@ -51,6 +51,7 @@ export class ProfileService {
         phone: user.phone,
         phoneVerified: user.phoneVerified,
         avatarUrl: user.avatarUrl,
+        coverUrl: user.coverUrl,
         country: user.country,
         city: user.city,
         timezone: user.timezone,
@@ -196,6 +197,7 @@ export class ProfileService {
       name?: string;
       preferredDisplayName?: string;
       avatarUrl?: string;
+      coverUrl?: string;
       phone?: string;
       country?: string;
       city?: string;
@@ -209,6 +211,7 @@ export class ProfileService {
         name: data.name,
         preferredDisplayName: data.preferredDisplayName,
         avatarUrl: data.avatarUrl,
+        coverUrl: data.coverUrl,
         phone: data.phone,
         country: data.country,
         city: data.city,
@@ -349,6 +352,99 @@ export class ProfileService {
         fileSize: doc.fileSize,
         extractedText: doc.extractedText,
       },
+    });
+  }
+
+  /**
+   * Deletes a document owned by the user.
+   */
+  static async deleteDocument(userId: string, documentId: string) {
+    return prisma.document.deleteMany({
+      where: { id: documentId, userId },
+    });
+  }
+
+  /**
+   * Adds a professional experience entry.
+   */
+  static async addExperience(
+    userId: string,
+    exp: {
+      role: string;
+      company: string;
+      period: string;
+      description?: string;
+      highlights?: string[];
+    }
+  ) {
+    let profile = await prisma.profile.findUnique({ where: { userId } });
+    if (!profile) {
+      profile = await prisma.profile.create({
+        data: { userId, targetOutcome: 'Career Growth' },
+      });
+    }
+
+    return prisma.experience.create({
+      data: {
+        profileId: profile.id,
+        role: exp.role,
+        company: exp.company,
+        period: exp.period,
+        description: exp.description || '',
+        highlights: exp.highlights || [],
+      },
+    });
+  }
+
+  /**
+   * Deletes a professional experience entry.
+   */
+  static async deleteExperience(userId: string, experienceId: string) {
+    const profile = await prisma.profile.findUnique({ where: { userId } });
+    if (!profile) return { count: 0 };
+    return prisma.experience.deleteMany({
+      where: { id: experienceId, profileId: profile.id },
+    });
+  }
+
+  /**
+   * Adds a skill to the user's profile.
+   */
+  static async addSkill(
+    userId: string,
+    skill: {
+      name: string;
+      category?: string;
+      yearsExperience?: number;
+      isTopSkill?: boolean;
+    }
+  ) {
+    let profile = await prisma.profile.findUnique({ where: { userId } });
+    if (!profile) {
+      profile = await prisma.profile.create({
+        data: { userId, targetOutcome: 'Career Growth' },
+      });
+    }
+
+    return prisma.skill.create({
+      data: {
+        profileId: profile.id,
+        name: skill.name,
+        category: skill.category || 'General',
+        yearsExperience: skill.yearsExperience || 1,
+        isTopSkill: skill.isTopSkill ?? false,
+      },
+    });
+  }
+
+  /**
+   * Deletes a skill from the user's profile.
+   */
+  static async deleteSkill(userId: string, skillId: string) {
+    const profile = await prisma.profile.findUnique({ where: { userId } });
+    if (!profile) return { count: 0 };
+    return prisma.skill.deleteMany({
+      where: { id: skillId, profileId: profile.id },
     });
   }
 

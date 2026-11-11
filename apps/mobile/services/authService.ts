@@ -183,6 +183,34 @@ export const authService = {
   },
 
   /**
+   * Update personal profile information (name, avatar, cover, phone, etc.)
+   */
+  async updatePersonalProfile(data: {
+    name?: string;
+    preferredDisplayName?: string;
+    avatarUrl?: string;
+    coverUrl?: string;
+    phone?: string;
+    country?: string;
+    city?: string;
+  }): Promise<UserProfile> {
+    const response = await api.put<{
+      success: boolean;
+      data: any;
+      message?: string;
+    }>('/profile/personal', data);
+
+    const updatedUser = response.data?.data;
+    if (updatedUser) {
+      const existing = await this.getStoredProfile();
+      const merged = { ...existing, ...updatedUser };
+      await AsyncStorage.setItem(CONFIG.STORAGE_KEYS.USER_PROFILE, JSON.stringify(merged));
+      return merged;
+    }
+    throw new Error(response.data?.message || 'Failed to update profile');
+  },
+
+  /**
    * Complete onboarding process
    */
   async completeOnboarding(payload?: any): Promise<void> {

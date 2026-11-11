@@ -23,18 +23,21 @@ export const whatsappService = {
     expiresAt: string;
     verificationCode?: string;
   }> {
-    try {
-      const res = await api.post('/whatsapp/link', { phoneNumber });
-      return res.data.data;
-    } catch {
-      // Offline fallback simulation
-      return {
-        success: true,
-        phoneNumber,
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-        verificationCode: '123456',
+    const res = await api.post<{
+      success: boolean;
+      message: string;
+      data: {
+        success: boolean;
+        phoneNumber: string;
+        expiresAt: string;
+        verificationCode?: string;
       };
+    }>('/whatsapp/link', { phoneNumber });
+
+    if (!res.data?.data) {
+      throw new Error(res.data?.message || 'Failed to dispatch verification code');
     }
+    return res.data.data;
   },
 
   /**
@@ -45,16 +48,20 @@ export const whatsappService = {
     isVerified: boolean;
     phoneNumber: string;
   }> {
-    try {
-      const res = await api.post('/whatsapp/verify', { code });
-      return res.data.data;
-    } catch {
-      return {
-        success: true,
-        isVerified: true,
-        phoneNumber: '+14155552671',
+    const res = await api.post<{
+      success: boolean;
+      message: string;
+      data: {
+        success: boolean;
+        isVerified: boolean;
+        phoneNumber: string;
       };
+    }>('/whatsapp/verify', { code: code.trim() });
+
+    if (!res.data?.data) {
+      throw new Error(res.data?.message || 'Failed to verify WhatsApp code');
     }
+    return res.data.data;
   },
 
   /**

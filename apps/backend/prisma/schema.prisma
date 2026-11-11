@@ -61,6 +61,7 @@ model User {
   name                  String
   preferredDisplayName  String?
   avatarUrl             String?
+  coverUrl              String?
   phone                 String?
   phoneVerified         Boolean                @default(false)
   emailVerified         Boolean                @default(false)

@@ -98,6 +98,96 @@ export const uploadDocument = async (req: AuthenticatedRequest, res: Response): 
   }
 };
 
+export const deleteDocument = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const { id } = req.params;
+    await ProfileService.deleteDocument(userId, id);
+    res.json({ success: true, message: 'Document deleted' } as ApiResponse);
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const addExperience = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const { role, company, period, description, highlights } = req.body;
+    if (!role || !company || !period) {
+      res.status(400).json({ success: false, error: 'Role, company, and period are required' } as ApiResponse);
+      return;
+    }
+
+    const exp = await ProfileService.addExperience(userId, { role, company, period, description, highlights });
+    res.status(201).json({ success: true, message: 'Experience added', data: exp } as ApiResponse);
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const deleteExperience = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const { id } = req.params;
+    await ProfileService.deleteExperience(userId, id);
+    res.json({ success: true, message: 'Experience removed' } as ApiResponse);
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const addSkill = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const { name, category, yearsExperience, isTopSkill } = req.body;
+    if (!name) {
+      res.status(400).json({ success: false, error: 'Skill name is required' } as ApiResponse);
+      return;
+    }
+
+    const skill = await ProfileService.addSkill(userId, { name, category, yearsExperience, isTopSkill });
+    res.status(201).json({ success: true, message: 'Skill added', data: skill } as ApiResponse);
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
+export const deleteSkill = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' } as ApiResponse);
+      return;
+    }
+
+    const { id } = req.params;
+    await ProfileService.deleteSkill(userId, id);
+    res.json({ success: true, message: 'Skill removed' } as ApiResponse);
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message } as ApiResponse);
+  }
+};
+
 export const deleteAccount = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user?.id;

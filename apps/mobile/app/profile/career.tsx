@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import { Button, Card, Badge, BottomSheet, ConfirmBottomSheet } from '@/components/ui';
 import { BORDER_RADIUS, FONTS, SPACING } from '@/constants/theme';
 import {
@@ -29,131 +30,40 @@ import {
   Building,
   Calendar,
   Location,
-  MagicStar,
   ExportSquare,
+  InfoCircle,
 } from 'iconsax-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
-import { connectionService } from '@/services';
-
-export interface StoredDocument {
-  id: string;
-  name: string;
-  type: 'cv' | 'portfolio' | 'certification' | 'other';
-  size: string;
-  uploadedAt: string;
-  isPrimary: boolean;
-  uri?: string;
-  extractedHighlights?: string[];
-}
-
-export interface WorkExperience {
-  id: string;
-  title: string;
-  company: string;
-  employmentType: 'Full-time' | 'Contract' | 'Freelance' | 'Part-time';
-  location: string;
-  workplaceType: 'Remote' | 'Hybrid' | 'On-site';
-  startDate: string;
-  endDate: string;
-  isCurrent: boolean;
-  description: string;
-  skills: string[];
-}
-
-const INITIAL_DOCUMENTS: StoredDocument[] = [
-  {
-    id: 'doc-1',
-    name: 'Alex_Rivers_Principal_Architect_2026.pdf',
-    type: 'cv',
-    size: '1.4 MB',
-    uploadedAt: 'Today',
-    isPrimary: true,
-    extractedHighlights: [
-      '10+ years architecting React Native & Expo applications',
-      'Designed zero-cost discovery scrapers & distributed backends',
-      'Ex-Staff Engineer at cloud fintech startups',
-    ],
-  },
-  {
-    id: 'doc-2',
-    name: 'System_Architecture_Portfolio.pdf',
-    type: 'portfolio',
-    size: '4.8 MB',
-    uploadedAt: '12 Oct 2026',
-    isPrimary: false,
-    extractedHighlights: ['Microservices architecture blueprints', 'High-throughput radar processing diagrams'],
-  },
-];
-
-const INITIAL_EXPERIENCE: WorkExperience[] = [
-  {
-    id: 'exp-1',
-    title: 'Principal Mobile Architect',
-    company: 'Nexus Decentralized Systems',
-    employmentType: 'Full-time',
-    location: 'San Francisco, CA',
-    workplaceType: 'Remote',
-    startDate: 'Jan 2024',
-    endDate: 'Present',
-    isCurrent: true,
-    description:
-      'Spearheading the core cross-platform mobile infrastructure. Scaled radar opportunity stream processing to 100k+ events/day with zero latency degradation.',
-    skills: ['React Native', 'Expo Router', 'TypeScript', 'PostgreSQL', 'WebSockets'],
-  },
-  {
-    id: 'exp-2',
-    title: 'Senior Staff Engineer',
-    company: 'Vanguard Labs',
-    employmentType: 'Contract',
-    location: 'New York, NY',
-    workplaceType: 'Hybrid',
-    startDate: 'Mar 2022',
-    endDate: 'Dec 2023',
-    isCurrent: false,
-    description:
-      'Engineered real-time data ingestion pipelines and multi-channel notification dispatchers across WhatsApp, Telegram, and Apple Push.',
-    skills: ['Node.js', 'Distributed Systems', 'Tailored AI Inference', 'Redis'],
-  },
-  {
-    id: 'exp-3',
-    title: 'Senior Mobile Engineer',
-    company: 'Starlight Fintech',
-    employmentType: 'Full-time',
-    location: 'Austin, TX',
-    workplaceType: 'Remote',
-    startDate: 'Jun 2019',
-    endDate: 'Feb 2022',
-    isCurrent: false,
-    description:
-      'Built financial POS checkout systems, offline persistence engines, and secure tenant biometric authorization flows.',
-    skills: ['React Native', 'Mobile Security', 'Offline Sync', 'GraphQL'],
-  },
-];
-
-const INITIAL_SKILLS = [
-  'React Native',
-  'Expo Router',
-  'TypeScript',
-  'Node.js',
-  'PostgreSQL',
-  'System Architecture',
-  'Autonomous Agents',
-  'GraphQL',
-];
+import { useQuery } from '@tanstack/react-query';
+import {
+  profileService,
+  ProfileDocument,
+  ProfileExperience,
+  ProfileSkill,
+} from '@/services/profileService';
+import { toast } from 'sonner-native';
 
 export default function CareerProfileScreen() {
   const router = useRouter();
   const { colors, isDark } = useTheme();
+  const { user, updateUser } = useAuth();
 
-  const [headline, setHeadline] = useState('Principal Mobile Architect · Expo & React Native');
-  const [currentRole, setCurrentRole] = useState('Staff Engineer & Mobile Consultant');
-  const [careerGoals, setCareerGoals] = useState('Leading high-impact decentralized systems and autonomous opportunity discovery.');
-  const [documents, setDocuments] = useState<StoredDocument[]>(INITIAL_DOCUMENTS);
-  const [experiences, setExperiences] = useState<WorkExperience[]>(INITIAL_EXPERIENCE);
-  const [skills, setSkills] = useState<string[]>(INITIAL_SKILLS);
-  const [newSkill, setNewSkill] = useState('');
+  // Load real profile from backend
+  const {
+    data: profileData,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ['profile-full'],
+    queryFn: () => profileService.getFullProfile(),
+  });
+
+  // Local state for professional identity inputs
+  const [headline, setHeadline] = useState('');
+  const [currentRole, setCurrentRole] = useState('');
+  const [careerGoals, setCareerGoals] = useState('');
 
   // Experience Sheet State
   const [isExpSheetOpen, setIsExpSheetOpen] = useState(false);
@@ -169,104 +79,96 @@ export default function CareerProfileScreen() {
   const [expDescription, setExpDescription] = useState('');
   const [expSkillsInput, setExpSkillsInput] = useState('');
 
-  // Document Viewer Sheet State
-  const [selectedDoc, setSelectedDoc] = useState<StoredDocument | null>(null);
+  // Skills input state
+  const [newSkill, setNewSkill] = useState('');
 
-  // Confirm Delete State (Using ConfirmBottomSheet - NO Alert.alert)
+  // Document Viewer Sheet State
+  const [selectedDoc, setSelectedDoc] = useState<ProfileDocument | null>(null);
+
+  // Confirm Delete State
   const [confirmDeleteDocId, setConfirmDeleteDocId] = useState<string | null>(null);
   const [confirmDeleteExpId, setConfirmDeleteExpId] = useState<string | null>(null);
-  const [autoExtractSuccessMsg, setAutoExtractSuccessMsg] = useState<string | null>(null);
 
-  // Saving Status
+  // Action / Saving Status
   const [isSaving, setIsSaving] = useState(false);
-  const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
-  // --- CV & Document Upload Handlers ---
+  // Sync inputs when profile data is retrieved
+  useEffect(() => {
+    if (profileData?.professional) {
+      setHeadline(profileData.professional.headline || '');
+      setCurrentRole(profileData.professional.currentRole || '');
+      setCareerGoals(profileData.professional.careerGoals || '');
+    } else if (user) {
+      setHeadline(user.headline || user.targetOutcome || '');
+    }
+  }, [profileData, user]);
+
+  const documents: ProfileDocument[] = profileData?.documents || [];
+  const experiences: ProfileExperience[] = profileData?.professional?.experiences || [];
+  const skills: ProfileSkill[] = profileData?.professional?.skills || [];
+
+  // --- Document Upload ---
   const handleUploadDocument = async (isCV: boolean) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       const res = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'],
+        type: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+        ],
         copyToCacheDirectory: true,
       });
 
       if (!res.canceled && res.assets?.[0]) {
         const file = res.assets[0];
-        const newDoc: StoredDocument = {
-          id: `doc-${Date.now()}`,
+        setIsUploadingDoc(true);
+
+        const fileSizeFormatted = file.size
+          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+          : '1.0 MB';
+
+        await profileService.uploadDocument({
           name: file.name,
           type: isCV ? 'cv' : 'portfolio',
-          size: file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '1.2 MB',
-          uploadedAt: 'Just Now',
-          isPrimary: isCV && !documents.some((d) => d.type === 'cv' && d.isPrimary),
-          uri: file.uri,
-          extractedHighlights: [
-            'Parsed professional competency profile',
-            'Synchronized target criteria with background radar',
-          ],
-        };
+          fileSize: fileSizeFormatted,
+          fileUrl: file.uri,
+        });
 
-        setDocuments((prev) => [newDoc, ...prev]);
+        await refetch();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-        // Auto-populate experience if it's a CV!
-        if (isCV) {
-          triggerAutoPopulateExperience(file.name);
-        }
+        toast.success(`"${file.name}" uploaded successfully`);
       }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload document');
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await profileService.deleteDocument(id);
+      await refetch();
+      setConfirmDeleteDocId(null);
+      setSelectedDoc(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.success('Document deleted');
     } catch {
-      // Fallback
+      toast.error('Failed to delete document');
     }
   };
 
-  // --- Auto-Populate Experience from CV ---
-  const triggerAutoPopulateExperience = (fileName: string) => {
-    const autoExtracted: WorkExperience = {
-      id: `exp-${Date.now()}`,
-      title: 'Senior Solutions Architect',
-      company: 'Aether Systems Inc.',
-      employmentType: 'Full-time',
-      location: 'San Francisco, CA',
-      workplaceType: 'Remote',
-      startDate: 'Aug 2023',
-      endDate: 'Present',
-      isCurrent: true,
-      description: `Role extracted from ${fileName}: Led multi-cloud serverless microservices and client telemetry systems.`,
-      skills: ['TypeScript', 'Cloud Architecture', 'React Native'],
-    };
-
-    setExperiences((prev) => [autoExtracted, ...prev]);
-    setAutoExtractSuccessMsg(`✨ Auto-populated work experience from "${fileName}". Review or edit details below.`);
-  };
-
-  // --- Document Actions ---
-  const handleMakePrimaryCV = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setDocuments((prev) =>
-      prev.map((doc) => ({
-        ...doc,
-        isPrimary: doc.id === id,
-      }))
-    );
-    if (selectedDoc) {
-      setSelectedDoc({ ...selectedDoc, isPrimary: true });
-    }
-  };
-
-  const handleOpenDocInBrowser = async (doc: StoredDocument) => {
+  const handleOpenDoc = async (doc: ProfileDocument) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (doc.uri) {
-      await WebBrowser.openBrowserAsync(doc.uri);
+    if (doc.fileUrl) {
+      await WebBrowser.openBrowserAsync(doc.fileUrl);
     } else {
-      await WebBrowser.openBrowserAsync('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
+      toast.info('Document preview is stored securely on device');
     }
-  };
-
-  const handleDeleteDoc = (id: string) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
-    setConfirmDeleteDocId(null);
-    setSelectedDoc(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   // --- Experience Management ---
@@ -286,109 +188,119 @@ export default function CareerProfileScreen() {
     setIsExpSheetOpen(true);
   };
 
-  const openEditExperience = (exp: WorkExperience) => {
+  const openEditExperience = (exp: ProfileExperience) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setEditingExpId(exp.id);
-    setExpTitle(exp.title);
+    setExpTitle(exp.role);
     setExpCompany(exp.company);
-    setExpType(exp.employmentType);
-    setExpLocation(exp.location);
-    setExpWorkplace(exp.workplaceType);
-    setExpStartDate(exp.startDate);
-    setExpEndDate(exp.endDate);
-    setExpIsCurrent(exp.isCurrent);
+    setExpType('Full-time');
+    setExpLocation('');
+    setExpWorkplace('Remote');
+    setExpStartDate(exp.period.split('-')[0]?.trim() || '');
+    setExpEndDate(exp.period.split('-')[1]?.trim() || '');
+    setExpIsCurrent(exp.period.toLowerCase().includes('present'));
     setExpDescription(exp.description);
-    setExpSkillsInput(exp.skills.join(', '));
+    setExpSkillsInput(exp.highlights ? exp.highlights.join(', ') : '');
     setIsExpSheetOpen(true);
   };
 
-  const handleSaveExperience = () => {
-    if (!expTitle.trim() || !expCompany.trim()) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const handleSaveExperience = async () => {
+    if (!expTitle.trim() || !expCompany.trim()) {
+      toast.error('Role and company are required');
+      return;
+    }
 
     const skillsArray = expSkillsInput
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
 
-    if (editingExpId) {
-      setExperiences((prev) =>
-        prev.map((e) =>
-          e.id === editingExpId
-            ? {
-                ...e,
-                title: expTitle.trim(),
-                company: expCompany.trim(),
-                employmentType: expType,
-                location: expLocation.trim() || 'San Francisco, CA',
-                workplaceType: expWorkplace,
-                startDate: expStartDate.trim() || '2023',
-                endDate: expIsCurrent ? 'Present' : expEndDate.trim() || '2024',
-                isCurrent: expIsCurrent,
-                description: expDescription.trim(),
-                skills: skillsArray.length > 0 ? skillsArray : e.skills,
-              }
-            : e
-        )
-      );
-    } else {
-      const newExp: WorkExperience = {
-        id: `exp-${Date.now()}`,
-        title: expTitle.trim(),
+    const periodString = `${expStartDate.trim() || '2024'} – ${
+      expIsCurrent ? 'Present' : expEndDate.trim() || 'Present'
+    }`;
+
+    try {
+      if (editingExpId) {
+        await profileService.deleteExperience(editingExpId);
+      }
+
+      await profileService.addExperience({
+        role: expTitle.trim(),
         company: expCompany.trim(),
-        employmentType: expType,
-        location: expLocation.trim() || 'Remote',
-        workplaceType: expWorkplace,
-        startDate: expStartDate.trim() || '2024',
-        endDate: expIsCurrent ? 'Present' : expEndDate.trim() || 'Present',
-        isCurrent: expIsCurrent,
+        period: periodString,
         description: expDescription.trim(),
-        skills: skillsArray,
-      };
-      setExperiences([newExp, ...experiences]);
+        highlights: skillsArray,
+      });
+
+      await refetch();
+      setIsExpSheetOpen(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.success(editingExpId ? 'Experience updated' : 'Experience added');
+    } catch {
+      toast.error('Could not save experience');
     }
-
-    setIsExpSheetOpen(false);
   };
 
-  const handleDeleteExperience = (id: string) => {
-    setExperiences((prev) => prev.filter((e) => e.id !== id));
-    setConfirmDeleteExpId(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const handleDeleteExperience = async (id: string) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await profileService.deleteExperience(id);
+      await refetch();
+      setConfirmDeleteExpId(null);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.success('Experience removed');
+    } catch {
+      toast.error('Could not remove experience');
+    }
   };
 
-  // --- Skills ---
-  const handleAddSkill = () => {
+  // --- Skills Management ---
+  const handleAddSkill = async () => {
     if (!newSkill.trim()) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!skills.includes(newSkill.trim())) {
-      setSkills([...skills, newSkill.trim()]);
-    }
+    const skillName = newSkill.trim();
     setNewSkill('');
-  };
-
-  const handleRemoveSkill = (skillToRemove: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSkills(skills.filter((s) => s !== skillToRemove));
+
+    try {
+      await profileService.addSkill({ name: skillName });
+      await refetch();
+      toast.success(`Added skill: ${skillName}`);
+    } catch {
+      toast.error('Could not save skill');
+    }
   };
 
-  // --- Save Career Profile ---
+  const handleRemoveSkill = async (skillId: string, skillName: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await profileService.deleteSkill(skillId);
+      await refetch();
+      toast.success(`Removed ${skillName}`);
+    } catch {
+      toast.error('Could not remove skill');
+    }
+  };
+
+  // --- Save Headline & Goals ---
   const handleSaveAll = async () => {
     setIsSaving(true);
-    setSavedFeedback(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      await connectionService.updateProfessional({
-        headline,
-        currentRole,
-        careerGoals,
-        targetRoles: ['Principal Mobile Architect', 'Staff Systems Engineer'],
+      await profileService.updateProfessional({
+        headline: headline.trim(),
+        currentRole: currentRole.trim(),
+        careerGoals: careerGoals.trim(),
       });
-      setSavedFeedback('Career profile & experiences saved successfully');
+
+      updateUser({
+        headline: headline.trim(),
+      });
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      toast.success('Career profile updated successfully');
     } catch {
-      setSavedFeedback('Career profile saved in preview.');
+      toast.error('Failed to update career profile');
     } finally {
       setIsSaving(false);
     }
@@ -409,452 +321,533 @@ export default function CareerProfileScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: 130 }]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Banner Feedback if Auto-extracted */}
-        {autoExtractSuccessMsg && (
-          <View style={[styles.autoExtractBanner, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }]}>
-            <MagicStar size={18} color="#10B981" variant="Bold" />
-            <Text style={[styles.autoExtractText, { color: '#065F46' }]}>
-              {autoExtractSuccessMsg}
-            </Text>
-            <TouchableOpacity onPress={() => setAutoExtractSuccessMsg(null)}>
-              <Text style={{ color: '#059669', fontFamily: FONTS.bold, fontSize: 13 }}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Section 1: Professional Headline */}
-        <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
-            PROFESSIONAL IDENTITY
+      {isLoading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+            Loading your verified profile...
           </Text>
-
-          <Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Professional Headline
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: isDark ? colors.background : '#F8FAFC',
-                  },
-                ]}
-                value={headline}
-                onChangeText={setHeadline}
-                placeholder="e.g. Principal Mobile Architect · React Native"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <View style={[styles.inputGroup, { marginTop: 12 }]}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Current Position
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: isDark ? colors.background : '#F8FAFC',
-                  },
-                ]}
-                value={currentRole}
-                onChangeText={setCurrentRole}
-                placeholder="e.g. Staff Software Engineer"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <View style={[styles.inputGroup, { marginTop: 12 }]}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Career Goals & Summary
-              </Text>
-              <TextInput
-                style={[
-                  styles.textArea,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: isDark ? colors.background : '#F8FAFC',
-                  },
-                ]}
-                value={careerGoals}
-                onChangeText={setCareerGoals}
-                multiline
-                numberOfLines={3}
-                placeholder="Describe your target roles and technical focus..."
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-          </Card>
         </View>
-
-        {/* Section 2: CV Versions & Uploadable Materials */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeaderRow}>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: 130 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Section 1: Professional Identity */}
+          <View style={styles.sectionWrap}>
             <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
-              CV & PORTFOLIO MATERIALS
+              PROFESSIONAL IDENTITY
             </Text>
-            <Badge label={`${documents.length} Uploaded`} variant="neutral" size="sm" />
-          </View>
 
-          {/* Action Row: Upload CV vs Upload Other Usable Material */}
-          <View style={styles.uploadActionRow}>
-            <TouchableOpacity
-              style={[
-                styles.uploadActionBtn,
-                {
-                  backgroundColor: colors.accent,
-                  shadowColor: colors.accent,
-                  shadowOpacity: 0.25,
-                  shadowRadius: 8,
-                },
-              ]}
-              onPress={() => handleUploadDocument(true)}
-              activeOpacity={0.85}
-            >
-              <DocumentUpload size={18} color="#FFFFFF" variant="Bold" />
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={styles.uploadActionTitle}>Upload CV / Resume</Text>
-                <Text style={styles.uploadActionSub}>Auto-extracts experiences</Text>
+            <Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Professional Headline
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.background : '#F8FAFC',
+                    },
+                  ]}
+                  value={headline}
+                  onChangeText={setHeadline}
+                  placeholder="e.g. Senior Full-Stack Engineer · Mobile & Cloud"
+                  placeholderTextColor={colors.textMuted}
+                />
               </View>
-            </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.uploadActionBtn,
-                {
-                  backgroundColor: isDark ? colors.card : '#FFFFFF',
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                },
-              ]}
-              onPress={() => handleUploadDocument(false)}
-              activeOpacity={0.8}
-            >
-              <FolderOpen size={18} color={colors.text} variant="Bold" />
-              <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={[styles.uploadActionTitle, { color: colors.text }]}>Add Portfolio/Doc</Text>
-                <Text style={[styles.uploadActionSub, { color: colors.textMuted }]}>Certificates, samples</Text>
+              <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Current Role / Position
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.background : '#F8FAFC',
+                    },
+                  ]}
+                  value={currentRole}
+                  onChangeText={setCurrentRole}
+                  placeholder="e.g. Lead Mobile Architect or Independent Consultant"
+                  placeholderTextColor={colors.textMuted}
+                />
               </View>
-            </TouchableOpacity>
+
+              <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Career Goals & Summary
+                </Text>
+                <TextInput
+                  style={[
+                    styles.textArea,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.background : '#F8FAFC',
+                    },
+                  ]}
+                  value={careerGoals}
+                  onChangeText={setCareerGoals}
+                  multiline
+                  numberOfLines={3}
+                  placeholder="Describe your ideal roles, focus areas, and milestone goals..."
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </Card>
           </View>
 
-          {/* Document List Cards */}
-          <View style={{ gap: 10, marginTop: 12 }}>
-            {documents.map((doc) => (
-              <Card
-                key={doc.id}
-                style={[
-                  styles.docCard,
-                  {
-                    backgroundColor: colors.card,
-                    borderColor: doc.isPrimary ? colors.accent : colors.border,
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  style={styles.docMainRow}
-                  onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    setSelectedDoc(doc);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View
-                    style={[
-                      styles.docIconWrap,
-                      {
-                        backgroundColor:
-                          doc.type === 'cv'
-                            ? colors.accent + '15'
-                            : '#3B82F615',
-                      },
-                    ]}
-                  >
-                    <DocumentText
-                      size={22}
-                      color={doc.type === 'cv' ? colors.accent : '#3B82F6'}
-                      variant="Bold"
-                    />
-                  </View>
-
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={[styles.docName, { color: colors.text }]} numberOfLines={1}>
-                        {doc.name}
-                      </Text>
-                      {doc.isPrimary && (
-                        <Badge label="Primary" variant="accent" size="sm" />
-                      )}
-                    </View>
-                    <Text style={[styles.docMeta, { color: colors.textMuted }]}>
-                      {doc.size} · Uploaded {doc.uploadedAt} · Tap to preview
-                    </Text>
-                  </View>
-
-                  <View style={styles.docActionsRight}>
-                    <TouchableOpacity
-                      style={styles.previewIconBtn}
-                      onPress={() => setSelectedDoc(doc)}
-                      activeOpacity={0.7}
-                    >
-                      <Eye size={18} color={colors.accent} variant="Bold" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.trashIconBtn}
-                      onPress={() => setConfirmDeleteDocId(doc.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Trash size={17} color="#EF4444" variant="Linear" />
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              </Card>
-            ))}
-          </View>
-        </View>
-
-        {/* Section 3: LinkedIn-Style Experience Section */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeaderRow}>
-            <View>
+          {/* Section 2: CV Versions & Uploadable Materials */}
+          <View style={styles.sectionWrap}>
+            <View style={styles.sectionHeaderRow}>
               <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
-                WORK EXPERIENCE
+                CV & RESUME MATERIALS
               </Text>
-              <Text style={[styles.sectionSubHeading, { color: colors.textSecondary }]}>
-                Auto-extracted from your CV or manually updated
-              </Text>
+              <Badge label={`${documents.length} Uploaded`} variant="neutral" size="sm" />
             </View>
 
-            <TouchableOpacity
-              style={[
-                styles.addExpBtn,
-                {
-                  backgroundColor: isDark ? 'rgba(255, 102, 0, 0.15)' : '#FFF7ED',
-                  borderColor: colors.accent,
-                },
-              ]}
-              onPress={openAddExperience}
-              activeOpacity={0.8}
-            >
-              <Add size={16} color={colors.accent} variant="Bold" />
-              <Text style={[styles.addExpBtnText, { color: colors.accent }]}>
-                Add Role
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Timeline Experience Cards */}
-          <View style={styles.timelineContainer}>
-            {experiences.map((exp, idx) => (
-              <View key={exp.id} style={styles.timelineItem}>
-                {/* Timeline vertical connector */}
-                {idx < experiences.length - 1 && (
-                  <View
-                    style={[
-                      styles.timelineLine,
-                      { backgroundColor: colors.borderSubtle },
-                    ]}
-                  />
-                )}
-
-                {/* Company Logo / Monogram Node */}
-                <View
-                  style={[
-                    styles.companyMonogram,
-                    {
-                      backgroundColor: isDark ? '#1E293B' : '#EEF2F6',
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <Building size={18} color={colors.accent} variant="Bold" />
-                </View>
-
-                {/* Experience Card */}
-                <Card
-                  style={[
-                    styles.expCard,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.expHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.expRoleTitle, { color: colors.text }]}>
-                        {exp.title}
-                      </Text>
-                      <Text style={[styles.expCompany, { color: colors.textSecondary }]}>
-                        {exp.company} · <Text style={{ color: colors.textMuted }}>{exp.employmentType}</Text>
-                      </Text>
-                    </View>
-
-                    {/* Edit & Delete Action Icons */}
-                    <View style={styles.expCardActions}>
-                      <TouchableOpacity
-                        style={styles.actionIconBtn}
-                        onPress={() => openEditExperience(exp)}
-                        activeOpacity={0.7}
-                      >
-                        <Edit2 size={16} color={colors.textSecondary} variant="Linear" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionIconBtn}
-                        onPress={() => setConfirmDeleteExpId(exp.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Trash size={16} color="#EF4444" variant="Linear" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Dates & Location */}
-                  <View style={styles.expMetaRow}>
-                    <View style={styles.metaBadge}>
-                      <Calendar size={13} color={colors.textMuted} variant="Linear" />
-                      <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                        {exp.startDate} – {exp.endDate}
-                      </Text>
-                    </View>
-                    <View style={styles.metaBadge}>
-                      <Location size={13} color={colors.textMuted} variant="Linear" />
-                      <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                        {exp.location} · {exp.workplaceType}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Role Description */}
-                  <Text style={[styles.expDesc, { color: colors.textSecondary }]}>
-                    {exp.description}
-                  </Text>
-
-                  {/* Skills Tags */}
-                  {exp.skills.length > 0 && (
-                    <View style={styles.expSkillsRow}>
-                      {exp.skills.map((s, i) => (
-                        <View
-                          key={i}
-                          style={[
-                            styles.expSkillPill,
-                            { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
-                          ]}
-                        >
-                          <Text style={[styles.expSkillText, { color: colors.textSecondary }]}>
-                            {s}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </Card>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Section 4: Skills Competency */}
-        <View style={styles.sectionWrap}>
-          <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
-            TECHNICAL SKILLS & COMPETENCIES
-          </Text>
-
-          <Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.skillInputRow}>
-              <TextInput
+            {/* Action Row: Upload CV vs Upload Portfolio */}
+            <View style={styles.uploadActionRow}>
+              <TouchableOpacity
                 style={[
-                  styles.skillInput,
+                  styles.uploadActionBtn,
                   {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: isDark ? colors.background : '#F8FAFC',
+                    backgroundColor: colors.accent,
+                    shadowColor: colors.accent,
+                    shadowOpacity: 0.25,
+                    shadowRadius: 8,
                   },
                 ]}
-                value={newSkill}
-                onChangeText={setNewSkill}
-                placeholder="Add skill (e.g. Distributed Systems)..."
-                placeholderTextColor={colors.textMuted}
-                onSubmitEditing={handleAddSkill}
-              />
+                onPress={() => handleUploadDocument(true)}
+                disabled={isUploadingDoc}
+                activeOpacity={0.85}
+              >
+                {isUploadingDoc ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <DocumentUpload size={18} color="#FFFFFF" variant="Bold" />
+                )}
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.uploadActionTitle}>Upload CV / Resume</Text>
+                  <Text style={styles.uploadActionSub}>PDF, DOCX, or TXT</Text>
+                </View>
+              </TouchableOpacity>
+
               <TouchableOpacity
-                style={[styles.addSkillBtn, { backgroundColor: colors.accent }]}
-                onPress={handleAddSkill}
+                style={[
+                  styles.uploadActionBtn,
+                  {
+                    backgroundColor: isDark ? colors.card : '#FFFFFF',
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                  },
+                ]}
+                onPress={() => handleUploadDocument(false)}
                 activeOpacity={0.8}
               >
-                <Add size={18} color="#FFFFFF" variant="Bold" />
+                <FolderOpen size={18} color={colors.text} variant="Bold" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={[styles.uploadActionTitle, { color: colors.text }]}>Add Portfolio</Text>
+                  <Text style={[styles.uploadActionSub, { color: colors.textMuted }]}>
+                    Certificates, samples
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.skillsChipsWrap}>
-              {skills.map((skill) => (
+            {/* Documents List or Empty State */}
+            {documents.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyStateCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.borderSubtle,
+                  },
+                ]}
+              >
                 <View
-                  key={skill}
                   style={[
-                    styles.skillChip,
-                    {
-                      backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-                      borderColor: colors.border,
-                    },
+                    styles.emptyStateIconWrap,
+                    { backgroundColor: colors.accent + '15' },
                   ]}
                 >
-                  <Text style={[styles.skillChipText, { color: colors.text }]}>
-                    {skill}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => handleRemoveSkill(skill)}
-                    style={styles.skillRemoveBtn}
-                  >
-                    <Text style={{ color: colors.textMuted, fontSize: 13 }}>✕</Text>
-                  </TouchableOpacity>
+                  <DocumentUpload size={28} color={colors.accent} variant="Bold" />
                 </View>
-              ))}
-            </View>
-          </Card>
-        </View>
+                <Text style={[styles.emptyStateTitle, { color: colors.text }]}>
+                  No CV or resumes uploaded yet
+                </Text>
+                <Text style={[styles.emptyStateSubtitle, { color: colors.textMuted }]}>
+                  Upload your CV or portfolio documents to automatically power background matching radars and tailored proposals.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.emptyStateCta, { backgroundColor: colors.accent }]}
+                  onPress={() => handleUploadDocument(true)}
+                  activeOpacity={0.85}
+                >
+                  <Add size={16} color="#FFFFFF" variant="Bold" />
+                  <Text style={styles.emptyStateCtaText}>Upload Your CV</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ gap: 10, marginTop: 12 }}>
+                {documents.map((doc) => (
+                  <Card
+                    key={doc.id}
+                    style={[
+                      styles.docCard,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <TouchableOpacity
+                      style={styles.docMainRow}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setSelectedDoc(doc);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View
+                        style={[
+                          styles.docIconWrap,
+                          {
+                            backgroundColor:
+                              doc.type === 'cv'
+                                ? colors.accent + '15'
+                                : '#3B82F615',
+                          },
+                        ]}
+                      >
+                        <DocumentText
+                          size={22}
+                          color={doc.type === 'cv' ? colors.accent : '#3B82F6'}
+                          variant="Bold"
+                        />
+                      </View>
 
-        {/* Save Changes Button */}
-        <View style={styles.saveWrap}>
-          {savedFeedback && (
-            <View style={styles.feedbackRow}>
-              <TickCircle size={16} color="#10B981" variant="Bold" />
-              <Text style={{ color: '#10B981', fontFamily: FONTS.medium, fontSize: 13 }}>
-                {savedFeedback}
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[styles.docName, { color: colors.text }]} numberOfLines={1}>
+                          {doc.name}
+                        </Text>
+                        <Text style={[styles.docMeta, { color: colors.textMuted }]}>
+                          {doc.fileSize || 'Document'} · Tap to preview
+                        </Text>
+                      </View>
+
+                      <View style={styles.docActionsRight}>
+                        <TouchableOpacity
+                          style={styles.previewIconBtn}
+                          onPress={() => setSelectedDoc(doc)}
+                          activeOpacity={0.7}
+                        >
+                          <Eye size={18} color={colors.accent} variant="Bold" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.trashIconBtn}
+                          onPress={() => setConfirmDeleteDocId(doc.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Trash size={17} color="#EF4444" variant="Linear" />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  </Card>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Section 3: Professional Experience History */}
+          <View style={styles.sectionWrap}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
+                  WORK EXPERIENCE
+                </Text>
+                <Text style={[styles.sectionSubHeading, { color: colors.textSecondary }]}>
+                  Your verified career history & past roles
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.addExpBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(255, 102, 0, 0.15)' : '#FFF7ED',
+                    borderColor: colors.accent,
+                  },
+                ]}
+                onPress={openAddExperience}
+                activeOpacity={0.8}
+              >
+                <Add size={16} color={colors.accent} variant="Bold" />
+                <Text style={[styles.addExpBtnText, { color: colors.accent }]}>
+                  Add Role
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Experience List or Clean Empty State */}
+            {experiences.length === 0 ? (
+              <View
+                style={[
+                  styles.emptyStateCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: colors.borderSubtle,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.emptyStateIconWrap,
+                    { backgroundColor: isDark ? '#1E293B' : '#EEF2F6' },
+                  ]}
+                >
+                  <Briefcase size={28} color={colors.accent} variant="Bold" />
+                </View>
+                <Text style={[styles.emptyStateTitle, { color: colors.text }]}>
+                  No work experience listed yet
+                </Text>
+                <Text style={[styles.emptyStateSubtitle, { color: colors.textMuted }]}>
+                  Add past positions, leadership roles, or projects so our agent can calibrate matching scores and generate high-signal pitches.
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.emptyStateCta,
+                    {
+                      backgroundColor: isDark ? colors.card : '#FFFFFF',
+                      borderColor: colors.accent,
+                      borderWidth: 1,
+                    },
+                  ]}
+                  onPress={openAddExperience}
+                  activeOpacity={0.85}
+                >
+                  <Add size={16} color={colors.accent} variant="Bold" />
+                  <Text style={[styles.emptyStateCtaText, { color: colors.accent }]}>
+                    Add Experience
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.timelineContainer}>
+                {experiences.map((exp, idx) => (
+                  <View key={exp.id} style={styles.timelineItem}>
+                    {idx < experiences.length - 1 && (
+                      <View
+                        style={[
+                          styles.timelineLine,
+                          { backgroundColor: colors.borderSubtle },
+                        ]}
+                      />
+                    )}
+
+                    <View
+                      style={[
+                        styles.companyMonogram,
+                        {
+                          backgroundColor: isDark ? '#1E293B' : '#EEF2F6',
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Building size={18} color={colors.accent} variant="Bold" />
+                    </View>
+
+                    <Card
+                      style={[
+                        styles.expCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.expHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.expRoleTitle, { color: colors.text }]}>
+                            {exp.role}
+                          </Text>
+                          <Text style={[styles.expCompany, { color: colors.textSecondary }]}>
+                            {exp.company}
+                          </Text>
+                        </View>
+
+                        <View style={styles.expCardActions}>
+                          <TouchableOpacity
+                            style={styles.actionIconBtn}
+                            onPress={() => openEditExperience(exp)}
+                            activeOpacity={0.7}
+                          >
+                            <Edit2 size={16} color={colors.textSecondary} variant="Linear" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionIconBtn}
+                            onPress={() => setConfirmDeleteExpId(exp.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Trash size={16} color="#EF4444" variant="Linear" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <View style={styles.expMetaRow}>
+                        <View style={styles.metaBadge}>
+                          <Calendar size={13} color={colors.textMuted} variant="Linear" />
+                          <Text style={[styles.metaText, { color: colors.textMuted }]}>
+                            {exp.period}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {exp.description ? (
+                        <Text style={[styles.expDesc, { color: colors.textSecondary }]}>
+                          {exp.description}
+                        </Text>
+                      ) : null}
+
+                      {exp.highlights && exp.highlights.length > 0 && (
+                        <View style={styles.expSkillsRow}>
+                          {exp.highlights.map((h, i) => (
+                            <View
+                              key={i}
+                              style={[
+                                styles.expSkillPill,
+                                {
+                                  backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.expSkillText,
+                                  { color: colors.textSecondary },
+                                ]}
+                              >
+                                {h}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </Card>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Section 4: Technical Skills */}
+          <View style={styles.sectionWrap}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionHeading, { color: colors.textMuted }]}>
+                CORE SKILLS & TECHNOLOGIES
               </Text>
+              <Badge label={`${skills.length} Skills`} variant="neutral" size="sm" />
             </View>
-          )}
 
-          <Button
-            title={isSaving ? 'Saving Profile...' : 'Save Career & Experience'}
-            variant="accent"
-            size="lg"
-            onPress={handleSaveAll}
-            isLoading={isSaving}
-          />
-        </View>
-      </ScrollView>
+            <Card style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {/* Input Row to Add Skill */}
+              <View style={styles.skillInputRow}>
+                <TextInput
+                  style={[
+                    styles.skillInput,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.background : '#F8FAFC',
+                    },
+                  ]}
+                  value={newSkill}
+                  onChangeText={setNewSkill}
+                  placeholder="Add skill (e.g. React Native, PostgreSQL, AI)..."
+                  placeholderTextColor={colors.textMuted}
+                  onSubmitEditing={handleAddSkill}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity
+                  style={[
+                    styles.addSkillBtn,
+                    { backgroundColor: colors.accent },
+                  ]}
+                  onPress={handleAddSkill}
+                  activeOpacity={0.8}
+                >
+                  <Add size={20} color="#FFFFFF" variant="Bold" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Skills Chips or Empty State */}
+              {skills.length === 0 ? (
+                <View style={styles.emptySkillsWrap}>
+                  <Code size={18} color={colors.textMuted} variant="Linear" />
+                  <Text style={[styles.emptySkillsText, { color: colors.textMuted }]}>
+                    No skills added yet. Type a technology or competency above and tap Add.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.skillsChipsWrap}>
+                  {skills.map((skill) => (
+                    <View
+                      key={skill.id}
+                      style={[
+                        styles.skillChip,
+                        {
+                          backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.skillChipText, { color: colors.text }]}>
+                        {skill.name}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveSkill(skill.id, skill.name)}
+                        style={styles.skillRemoveBtn}
+                      >
+                        <Text style={{ color: colors.textMuted, fontSize: 13 }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </Card>
+          </View>
+
+          {/* Save Changes Button */}
+          <View style={styles.saveWrap}>
+            <Button
+              title={isSaving ? 'Saving Profile...' : 'Save Career & Experience'}
+              variant="accent"
+              size="lg"
+              onPress={handleSaveAll}
+              isLoading={isSaving}
+            />
+          </View>
+        </ScrollView>
+      )}
 
       {/* In-App Document Viewer & Preview BottomSheet */}
       {selectedDoc && (
         <BottomSheet
           visible={!!selectedDoc}
           onClose={() => setSelectedDoc(null)}
-          title="Document & CV Preview"
+          title="Document & CV Details"
           subtitle={selectedDoc.name}
         >
           <View style={{ paddingBottom: 20 }}>
-            {/* Document Header Card */}
             <View
               style={[
                 styles.viewerHeaderCard,
@@ -867,61 +860,20 @@ export default function CareerProfileScreen() {
                   {selectedDoc.name}
                 </Text>
                 <Text style={[styles.viewerDocMeta, { color: colors.textMuted }]}>
-                  {selectedDoc.size} · Uploaded {selectedDoc.uploadedAt}
+                  {selectedDoc.fileSize || 'Standard file'} · Uploaded {new Date(selectedDoc.uploadedAt).toLocaleDateString()}
                 </Text>
               </View>
-              {selectedDoc.isPrimary && (
-                <Badge label="Primary" variant="accent" size="sm" />
-              )}
             </View>
 
-            {/* Extracted Highlights */}
-            <Text style={[styles.viewerSectionHeading, { color: colors.textMuted }]}>
-              DETECTED HIGHLIGHTS FOR RADARS
-            </Text>
-            <View style={{ gap: 8, marginBottom: SPACING.lg }}>
-              {(selectedDoc.extractedHighlights || [
-                'Parsed skills: React Native, Systems Architecture',
-                'Calibrated matching score for Staff & Principal roles',
-              ]).map((highlight, idx) => (
-                <View key={idx} style={styles.viewerHighlightRow}>
-                  <TickCircle size={16} color="#10B981" variant="Bold" />
-                  <Text style={[styles.viewerHighlightText, { color: colors.textSecondary }]}>
-                    {highlight}
-                  </Text>
-                </View>
-              ))}
-            </View>
-
-            {/* Viewer Action Buttons */}
             <View style={{ gap: 10 }}>
               <TouchableOpacity
                 style={[styles.viewerPrimaryBtn, { backgroundColor: colors.accent }]}
-                onPress={() => handleOpenDocInBrowser(selectedDoc)}
+                onPress={() => handleOpenDoc(selectedDoc)}
                 activeOpacity={0.8}
               >
                 <ExportSquare size={18} color="#FFFFFF" variant="Bold" />
                 <Text style={styles.viewerPrimaryBtnText}>Open Document</Text>
               </TouchableOpacity>
-
-              {selectedDoc.type === 'cv' && !selectedDoc.isPrimary && (
-                <TouchableOpacity
-                  style={[
-                    styles.viewerSecondaryBtn,
-                    {
-                      borderColor: colors.accent,
-                      backgroundColor: isDark ? 'rgba(255, 102, 0, 0.1)' : '#FFF7ED',
-                    },
-                  ]}
-                  onPress={() => handleMakePrimaryCV(selectedDoc.id)}
-                  activeOpacity={0.8}
-                >
-                  <Star1 size={18} color={colors.accent} variant="Bold" />
-                  <Text style={[styles.viewerSecondaryBtnText, { color: colors.accent }]}>
-                    Make Primary for Applications
-                  </Text>
-                </TouchableOpacity>
-              )}
 
               <TouchableOpacity
                 style={[
@@ -949,230 +901,178 @@ export default function CareerProfileScreen() {
         visible={isExpSheetOpen}
         onClose={() => setIsExpSheetOpen(false)}
         title={editingExpId ? 'Edit Work Experience' : 'Add Work Experience'}
-        subtitle="LinkedIn-style professional experience history"
+        subtitle="Record your positions and accomplishments"
       >
-        <View style={{ paddingBottom: 20 }}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Job Title *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: isDark ? colors.background : '#F8FAFC',
-                },
-              ]}
-              value={expTitle}
-              onChangeText={setExpTitle}
-              placeholder="e.g. Principal Mobile Architect"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-
-          <View style={[styles.inputGroup, { marginTop: 12 }]}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Company Name *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: isDark ? colors.background : '#F8FAFC',
-                },
-              ]}
-              value={expCompany}
-              onChangeText={setExpCompany}
-              placeholder="e.g. Stripe, Vercel, or Freelance"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-
-          {/* Employment Type & Workplace Type */}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            <View style={{ flex: 1 }}>
+        <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+          <View style={{ paddingBottom: 20 }}>
+            <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Employment Type
+                Job Title / Role *
               </Text>
-              <View style={styles.selectorRow}>
-                {(['Full-time', 'Contract', 'Freelance'] as const).map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.typeChip,
-                      expType === type && {
-                        backgroundColor: colors.accent,
-                        borderColor: colors.accent,
-                      },
-                      { borderColor: colors.border },
-                    ]}
-                    onPress={() => setExpType(type)}
-                  >
-                    <Text
-                      style={[
-                        styles.typeChipText,
-                        { color: expType === type ? '#FFF' : colors.text },
-                      ]}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.background : '#F8FAFC',
+                  },
+                ]}
+                value={expTitle}
+                onChangeText={setExpTitle}
+                placeholder="e.g. Lead Software Engineer"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={[styles.inputGroup, { marginTop: 12 }]}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Company / Organization *
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.background : '#F8FAFC',
+                  },
+                ]}
+                value={expCompany}
+                onChangeText={setExpCompany}
+                placeholder="e.g. Acme Corp or Self-Employed"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            {/* Dates */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Start Date
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.background : '#F8FAFC',
+                    },
+                  ]}
+                  value={expStartDate}
+                  onChangeText={setExpStartDate}
+                  placeholder="e.g. Jan 2023"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  End Date
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: isDark ? colors.background : '#F8FAFC',
+                      opacity: expIsCurrent ? 0.5 : 1,
+                    },
+                  ]}
+                  value={expIsCurrent ? 'Present' : expEndDate}
+                  onChangeText={setExpEndDate}
+                  editable={!expIsCurrent}
+                  placeholder="e.g. Present"
+                  placeholderTextColor={colors.textMuted}
+                />
               </View>
             </View>
-          </View>
 
-          {/* Location & Dates */}
-          <View style={[styles.inputGroup, { marginTop: 12 }]}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Location (City & Country)
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: isDark ? colors.background : '#F8FAFC',
-                },
-              ]}
-              value={expLocation}
-              onChangeText={setExpLocation}
-              placeholder="e.g. San Francisco, CA · Remote"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Start Date
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: isDark ? colors.background : '#F8FAFC',
-                  },
-                ]}
-                value={expStartDate}
-                onChangeText={setExpStartDate}
-                placeholder="e.g. Jan 2023"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                End Date
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: isDark ? colors.background : '#F8FAFC',
-                    opacity: expIsCurrent ? 0.5 : 1,
-                  },
-                ]}
-                value={expIsCurrent ? 'Present' : expEndDate}
-                onChangeText={setExpEndDate}
-                editable={!expIsCurrent}
-                placeholder="e.g. Present"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
-          </View>
-
-          {/* Currently Working Checkbox */}
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setExpIsCurrent(!expIsCurrent)}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.checkboxBox,
-                {
-                  borderColor: expIsCurrent ? colors.accent : colors.border,
-                  backgroundColor: expIsCurrent ? colors.accent : 'transparent',
-                },
-              ]}
+            {/* Currently Working Checkbox */}
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={() => setExpIsCurrent(!expIsCurrent)}
+              activeOpacity={0.8}
             >
-              {expIsCurrent && <TickCircle size={14} color="#FFF" variant="Bold" />}
+              <View
+                style={[
+                  styles.checkboxBox,
+                  {
+                    borderColor: expIsCurrent ? colors.accent : colors.border,
+                    backgroundColor: expIsCurrent ? colors.accent : 'transparent',
+                  },
+                ]}
+              >
+                {expIsCurrent && <TickCircle size={14} color="#FFF" variant="Bold" />}
+              </View>
+              <Text style={[styles.checkboxLabel, { color: colors.text }]}>
+                I currently work in this role
+              </Text>
+            </TouchableOpacity>
+
+            {/* Description */}
+            <View style={[styles.inputGroup, { marginTop: 12 }]}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Description & Key Accomplishments
+              </Text>
+              <TextInput
+                style={[
+                  styles.textArea,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.background : '#F8FAFC',
+                  },
+                ]}
+                value={expDescription}
+                onChangeText={setExpDescription}
+                multiline
+                numberOfLines={4}
+                placeholder="Outline your impact, projects built, and milestones achieved..."
+                placeholderTextColor={colors.textMuted}
+              />
             </View>
-            <Text style={[styles.checkboxLabel, { color: colors.text }]}>
-              I currently work in this role
-            </Text>
-          </TouchableOpacity>
 
-          {/* Description */}
-          <View style={[styles.inputGroup, { marginTop: 12 }]}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Description & Key Accomplishments
-            </Text>
-            <TextInput
-              style={[
-                styles.textArea,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: isDark ? colors.background : '#F8FAFC',
-                },
-              ]}
-              value={expDescription}
-              onChangeText={setExpDescription}
-              multiline
-              numberOfLines={4}
-              placeholder="Outline your impact, projects built, and milestones achieved..."
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
+            {/* Highlights / Skills used */}
+            <View style={[styles.inputGroup, { marginTop: 12 }]}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                Highlights & Tech Stack (comma-separated)
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.background : '#F8FAFC',
+                  },
+                ]}
+                value={expSkillsInput}
+                onChangeText={setExpSkillsInput}
+                placeholder="e.g. React Native, TypeScript, Systems Design"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
 
-          {/* Skills used */}
-          <View style={[styles.inputGroup, { marginTop: 12 }]}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Skills Used (comma-separated)
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  borderColor: colors.border,
-                  backgroundColor: isDark ? colors.background : '#F8FAFC',
-                },
-              ]}
-              value={expSkillsInput}
-              onChangeText={setExpSkillsInput}
-              placeholder="e.g. React Native, TypeScript, Architecture"
-              placeholderTextColor={colors.textMuted}
-            />
+            <View style={{ marginTop: SPACING.lg }}>
+              <Button
+                title={editingExpId ? 'Update Experience' : 'Save Experience'}
+                variant="accent"
+                size="lg"
+                onPress={handleSaveExperience}
+              />
+            </View>
           </View>
-
-          <View style={{ marginTop: SPACING.lg }}>
-            <Button
-              title={editingExpId ? 'Update Experience' : 'Save Experience'}
-              variant="accent"
-              size="lg"
-              onPress={handleSaveExperience}
-            />
-          </View>
-        </View>
+        </ScrollView>
       </BottomSheet>
 
-      {/* Delete Document Confirmation BottomSheet (Zero Alerts) */}
+      {/* Delete Document Confirmation BottomSheet */}
       <ConfirmBottomSheet
         visible={!!confirmDeleteDocId}
         title="Delete Document?"
-        description="Are you sure you want to remove this document? Any automated proposal context linked to this CV version will be unlinked."
+        description="Are you sure you want to remove this document? Any automated matching criteria linked to this CV will be refreshed."
         confirmText="Delete Document"
         cancelText="Keep Document"
         variant="destructive"
@@ -1183,10 +1083,10 @@ export default function CareerProfileScreen() {
         onCancel={() => setConfirmDeleteDocId(null)}
       />
 
-      {/* Delete Experience Confirmation BottomSheet (Zero Alerts) */}
+      {/* Delete Experience Confirmation BottomSheet */}
       <ConfirmBottomSheet
         visible={!!confirmDeleteExpId}
-        title="Delete Experience Role?"
+        title="Delete Experience Entry?"
         description="Are you sure you want to delete this work experience entry? This change will be reflected in your profile and radar calibration."
         confirmText="Delete Role"
         cancelText="Cancel"
@@ -1222,22 +1122,18 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
     fontSize: 17,
   },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: FONTS.medium,
+    fontSize: 14,
+  },
   scrollContent: {
     padding: SPACING.md,
-  },
-  autoExtractBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
-    marginBottom: SPACING.md,
-    gap: 10,
-  },
-  autoExtractText: {
-    flex: 1,
-    fontFamily: FONTS.medium,
-    fontSize: 13,
   },
   sectionWrap: {
     marginBottom: SPACING.lg,
@@ -1315,6 +1211,50 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
+  emptyStateCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    padding: SPACING.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  emptyStateIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyStateTitle: {
+    fontFamily: FONTS.bold,
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  emptyStateSubtitle: {
+    fontFamily: FONTS.regular,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+    paddingHorizontal: SPACING.md,
+  },
+  emptyStateCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: BORDER_RADIUS.full,
+  },
+  emptyStateCtaText: {
+    color: '#FFFFFF',
+    fontFamily: FONTS.bold,
+    fontSize: 13,
+  },
   docCard: {
     borderRadius: BORDER_RADIUS.xl,
     borderWidth: 1,
@@ -1365,7 +1305,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   timelineContainer: {
-    marginTop: 4,
+    marginTop: 12,
   },
   timelineItem: {
     flexDirection: 'row',
@@ -1471,6 +1411,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  emptySkillsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    padding: SPACING.sm,
+  },
+  emptySkillsText: {
+    flex: 1,
+    fontFamily: FONTS.regular,
+    fontSize: 12.5,
+  },
   skillsChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1497,14 +1449,6 @@ const styles = StyleSheet.create({
   saveWrap: {
     marginTop: SPACING.lg,
   },
-  feedbackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginBottom: 10,
-  },
-  // Viewer BottomSheet Styles
   viewerHeaderCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1521,21 +1465,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     fontSize: 12,
     marginTop: 2,
-  },
-  viewerSectionHeading: {
-    fontFamily: FONTS.bold,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  viewerHighlightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  viewerHighlightText: {
-    fontFamily: FONTS.regular,
-    fontSize: 13,
   },
   viewerPrimaryBtn: {
     height: 48,
@@ -1562,23 +1491,6 @@ const styles = StyleSheet.create({
   viewerSecondaryBtnText: {
     fontFamily: FONTS.semiBold,
     fontSize: 13.5,
-  },
-  selectorRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 4,
-  },
-  typeChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeChipText: {
-    fontFamily: FONTS.medium,
-    fontSize: 12,
   },
   checkboxRow: {
     flexDirection: 'row',

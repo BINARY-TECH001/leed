@@ -6,4 +6,5 @@ export * from './proposalService';
 export * from './sourceService';
 export * from './whatsappService';
 export * from './connectionService';
+export * from './profileService';
 export * from './authService';

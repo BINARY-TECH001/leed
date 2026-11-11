@@ -33,6 +33,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
 import { radarService } from '@/services/radarService';
+import { authService } from '@/services/authService';
 import { toast } from 'sonner-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -47,13 +48,40 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, themePreference, setThemePreference, isDark } = useTheme();
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, isLoading, updateUser } = useAuth();
 
-  const [coverUrl, setCoverUrl] = useState<string>(DEFAULT_COVER);
+  const [coverUrl, setCoverUrl] = useState<string>(user?.coverUrl || DEFAULT_COVER);
   const [avatarUrl, setAvatarUrl] = useState<string>(user?.avatarUrl || DEFAULT_AVATAR);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [pickerInitialTab, setPickerInitialTab] = useState<'avatar' | 'cover'>('avatar');
   const [isSignOutSheetOpen, setIsSignOutSheetOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (user?.coverUrl) setCoverUrl(user.coverUrl);
+    if (user?.avatarUrl) setAvatarUrl(user.avatarUrl);
+  }, [user?.coverUrl, user?.avatarUrl]);
+
+  const handleSelectAvatar = async (url: string) => {
+    setAvatarUrl(url);
+    updateUser({ avatarUrl: url });
+    try {
+      await authService.updatePersonalProfile({ avatarUrl: url });
+      toast.success('Avatar updated successfully');
+    } catch {
+      toast.error('Failed to sync avatar with server');
+    }
+  };
+
+  const handleSelectCover = async (url: string) => {
+    setCoverUrl(url);
+    updateUser({ coverUrl: url });
+    try {
+      await authService.updatePersonalProfile({ coverUrl: url });
+      toast.success('Cover image updated successfully');
+    } catch {
+      toast.error('Failed to sync cover image with server');
+    }
+  };
 
   const { data: radars = [] } = useQuery({
     queryKey: ['radars'],
@@ -563,8 +591,8 @@ export default function ProfileScreen() {
         initialTab={pickerInitialTab}
         currentAvatarUrl={avatarUrl}
         currentCoverUrl={coverUrl}
-        onSelectAvatar={(url) => setAvatarUrl(url)}
-        onSelectCover={(url) => setCoverUrl(url)}
+        onSelectAvatar={handleSelectAvatar}
+        onSelectCover={handleSelectCover}
       />
 
       {/* Sign Out Confirmation BottomSheet (Zero Alerts, Responsive Sheet) */}

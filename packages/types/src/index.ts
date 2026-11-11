@@ -188,7 +188,10 @@ export interface UserProfile {
   name: string;
   email: string;
   emailVerified?: boolean;
+  phone?: string;
+  phoneVerified?: boolean;
   avatarUrl?: string;
+  coverUrl?: string;
   headline?: string;
   bio: string;
   targetOutcome: string;

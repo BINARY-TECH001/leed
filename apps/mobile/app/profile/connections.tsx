@@ -154,7 +154,9 @@ export default function ConnectionsScreen() {
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(COUNTRIES[0]);
   const [isCountryPickerOpen, setIsCountryPickerOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
-  const [waLocalNumber, setWaLocalNumber] = useState('8012345678');
+  const [waLocalNumber, setWaLocalNumber] = useState(
+    user?.phone ? user.phone.replace(/^\+\d{1,3}/, '') : ''
+  );
   const [waCode, setWaCode] = useState('');
   const [waStep, setWaStep] = useState<'idle' | 'code_sent' | 'verified'>('idle');
   const [waLoading, setWaLoading] = useState(false);
@@ -162,7 +164,7 @@ export default function ConnectionsScreen() {
 
   // 3. Email State
   const [emailConnected, setEmailConnected] = useState(true);
-  const [targetEmail, setTargetEmail] = useState(user?.email || 'alex@prospectai.dev');
+  const [targetEmail, setTargetEmail] = useState(user?.email || '');
   const [emailFrequency, setEmailFrequency] = useState<'realtime' | 'daily' | 'weekly'>('daily');
   const [emailMinScore, setEmailMinScore] = useState(85);
 
@@ -247,9 +249,13 @@ export default function ConnectionsScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
-      await whatsappService.linkPhone(fullWaPhone);
+      const res = await whatsappService.linkPhone(fullWaPhone);
       setWaStep('code_sent');
-      setFeedback(`Verification code dispatched to ${fullWaPhone} via WhatsApp.`);
+      if (res?.verificationCode) {
+        setFeedback(`Verification code generated for ${fullWaPhone}. Enter code: ${res.verificationCode}`);
+      } else {
+        setFeedback(`Verification code dispatched to ${fullWaPhone} via WhatsApp.`);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
       setFeedback(err.message || 'Failed to dispatch WhatsApp code.');

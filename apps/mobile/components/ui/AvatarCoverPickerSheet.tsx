@@ -143,11 +143,13 @@ export const AvatarCoverPickerSheet: React.FC<AvatarCoverPickerSheetProps> = ({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: activeTab === 'avatar' ? [1, 1] : [16, 6],
-        quality: 0.85,
+        quality: 0.7,
+        base64: true,
       });
 
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const uri = result.assets[0].uri;
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
         if (activeTab === 'avatar') {
           onSelectAvatar(uri);
         } else {
