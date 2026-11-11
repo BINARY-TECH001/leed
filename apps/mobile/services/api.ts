@@ -45,7 +45,14 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+    // Do not attempt token refresh for authentication endpoints (login, signup, etc.)
+    const isAuthRoute =
+      originalRequest?.url?.includes('/auth/login') ||
+      originalRequest?.url?.includes('/auth/signup') ||
+      originalRequest?.url?.includes('/auth/refresh-token') ||
+      originalRequest?.url?.includes('/auth/social');
+
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthRoute) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });

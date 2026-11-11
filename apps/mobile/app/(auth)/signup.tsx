@@ -76,8 +76,9 @@ export default function SignUpScreen() {
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        err?.message ||
-        'Registration failed. Please try again.';
+        (err?.response?.status === 503
+          ? 'Server is spinning up. Please try again in 15 seconds.'
+          : err?.message || 'Registration failed. Please try again.');
       toast.error(msg);
     } finally {
       setIsLoading(false);

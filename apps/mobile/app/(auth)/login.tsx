@@ -61,8 +61,9 @@ export default function LoginScreen() {
       const msg =
         err?.response?.data?.error ||
         err?.response?.data?.message ||
-        err?.message ||
-        'Authentication failed. Please check your credentials.';
+        (err?.response?.status === 503
+          ? 'Server is spinning up. Please try again in 15 seconds.'
+          : err?.message || 'Authentication failed. Please check your credentials.');
       toast.error(msg);
     } finally {
       setIsLoading(false);
